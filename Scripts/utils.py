@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import plistlib
 import shutil
@@ -8,8 +9,6 @@ import zipfile
 class Utils:
     def __init__(self, script_name = "Hardware Sniffer"):
         self.script_name = script_name
-        self.pci_ids = self.read_file(os.path.join(os.path.dirname(os.path.realpath(__file__)), "datasets", "usb.ids"))
-        self.usb_ids = self.read_file(os.path.join(os.path.dirname(os.path.realpath(__file__)), "datasets", "usb.ids"))
     
     def write_file(self, file_path, data):
         file_extension = os.path.splitext(file_path)[1]
@@ -192,4 +191,6 @@ class Utils:
         print("")
 
         print("Thank you for using our program!\n")
-        exit(0)
+
+        self.request_input("Press Enter to exit.")
+        sys.exit(0)
