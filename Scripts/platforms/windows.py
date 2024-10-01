@@ -295,6 +295,7 @@ class WindowsHardwareInfo:
         }
 
         self.devices_by_class["HIDClass"] = sorted(self.devices_by_class.get("HIDClass"), key=lambda item:item.PNPDeviceID.split("\\")[1])
+        acpi_device = None
         seen_ids = set()
             
         for device in self.devices_by_class.get("HIDClass") + self.devices_by_class.get("Keyboard") + self.devices_by_class.get("Mouse"):
