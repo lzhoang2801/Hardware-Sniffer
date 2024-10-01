@@ -16,6 +16,7 @@ class WindowsHardwareInfo:
         self.classify_gpu = gpu_identifier.GPUIdentifier().classify_gpu
         self.get_device_location_paths = device_locator.WindowsDeviceLocator().get_device_location_paths
         self.utils = utils.Utils()
+        self.usb_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "usb.ids"))
 
     def parse_device_path(self, device_path):
         if "VEN" in device_path:
@@ -341,7 +342,10 @@ class WindowsHardwareInfo:
             seen_ids.add(device_info.get("Device ID"))
 
             if not device_info.get("Bus Type") in ("ACPI"):
-                device_name = self.utils.usb_ids.get(device_info.get("Device ID")[:4], {}).get("devices", {}).get(device_info.get("Device ID")[5:]) or device_name
+                try:
+                    device_name = self.usb_ids.get(device_info.get("Device ID")[:4]).get("devices")[device_info.get("Device ID")[5:]]
+                except:
+                    pass
                 device_info["Bus Type"] = "USB"
                 del device_info["Device Type"]
             else:

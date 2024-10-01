@@ -10,6 +10,14 @@ class Utils:
     def __init__(self, script_name = "Hardware Sniffer"):
         self.script_name = script_name
     
+    def get_full_path(self, *path):
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+            
+        return os.path.join(base_path, *path)
+
     def write_file(self, file_path, data):
         file_extension = os.path.splitext(file_path)[1]
 
