@@ -3,7 +3,7 @@
   <h3 align="center">Hardware Sniffer</h3>
 
   <p align="center">
-    It's a crucial component of the [OpCore Simplify](https://github.com/lzhoang2801/OpCore-Simplify) project, it plays an essential role in simplifying and automating the process of collecting and analyzing hardware data. The name emphasizes its function of "sniffing out" all relevant hardware details to provide a comprehensive overview of the system's components.
+    It's a crucial component of the <a href="https://github.com/lzhoang2801/OpCore-Simplify">OpCore Simplify</a> project, it plays an essential role in simplifying and automating the process of collecting and analyzing hardware data. The name emphasizes its function of "sniffing out" all relevant hardware details to provide a comprehensive overview of the system's components.
     <br />
     <br />
     <a href="https://github.com/lzhoang2801/Hardware-Sniffer/issues">Report Bug</a>
