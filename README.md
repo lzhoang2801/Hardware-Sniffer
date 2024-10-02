@@ -50,7 +50,7 @@
 
 ## 🛠️ **Usage Guide**
 
-1. **Download**: Head to the [Releases](https://github.com/YOUR_REPO/releases) tab of Hardware Sniffer and download the latest version.
+1. **Download**: Head to the [Releases](https://github.com/lzhoang2801/Hardware-Sniffer/releases) tab of Hardware Sniffer and download the latest version.
 2. **Launch**: Run `Hardware-Sniffer.exe`. The information gathering process might take a few moments.
 3. **Main Menu**: Once data collection is complete, you’ll reach the main screen with three options:
 
