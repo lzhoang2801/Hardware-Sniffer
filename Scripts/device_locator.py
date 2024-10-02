@@ -1,9 +1,8 @@
-from Scripts import run
 import re
 
 class WindowsDeviceLocator:
     def __init__(self):
-        self.run = run.Run().run
+        pass
     
     def convert_pci_path(self, path):
         components = path.split("#")
@@ -28,9 +27,6 @@ class WindowsDeviceLocator:
         return "/".join(result)
     
     def convert_acpi_path(self, path):
-        if "PCI(" in path:
-            return ""
-        
         components = path.split("#")
         result = []
         
@@ -44,25 +40,22 @@ class WindowsDeviceLocator:
                 
         return ".".join(result)
     
-    def get_device_location_paths(self, pnp_device_id):
-        get_location_paths_command = (
-            'Get-PnpDeviceProperty -InstanceId "{}" '
-            '-KeyName DEVPKEY_Device_LocationPaths | Select-Object -ExpandProperty Data'
-        )
-        
-        output = self.run({
-            "args":["powershell", "-Command", get_location_paths_command.format(pnp_device_id)]
-        })
-        
-        if output[-1] != 0 or not output[0]:
-            return None
-        
-        location_paths = output[0].strip().splitlines()
-        pci_path = self.convert_pci_path(location_paths[0])
-        acpi_path = self.convert_acpi_path(location_paths[-1])
+    def get_device_location_paths(self, device):
+        try:
+            location_paths = (device.GetDeviceProperties(["DEVPKEY_Device_LocationPaths"])[0][0].Data)
+        except:
+            return {}
+
+        acpi_path = pci_path = None
+
+        for path in location_paths:
+            if path.startswith("ACPI") and not "#PCI" in path:
+                acpi_path = self.convert_acpi_path(path)
+            elif path.startswith("PCI"):
+                pci_path = self.convert_pci_path(path)
         
         if not pci_path and not acpi_path:
-            return None
+            return {}
         elif not pci_path:
             return {
                 "ACPI Path": acpi_path

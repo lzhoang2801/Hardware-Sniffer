@@ -166,7 +166,7 @@ class WindowsHardwareInfo:
                 continue
             
             device_info = self.classify_gpu(self.parse_device_path(pnp_device_id).get("Device ID"))
-            device_info.update(self.get_device_location_paths(pnp_device_id))
+            device_info.update(self.get_device_location_paths(device))
             gpu_info[self.utils.get_unique_key(device_name, gpu_info)] = device_info
 
         return gpu_info
@@ -236,7 +236,7 @@ class WindowsHardwareInfo:
             device_info = self.parse_device_path(pnp_device_id)
             
             if device_info.get("Bus Type") == "PCI":
-                device_info.update(self.get_device_location_paths(pnp_device_id))
+                device_info.update(self.get_device_location_paths(device))
             elif device_info.get("Bus Type") == "USB":
                 pass
             else:
@@ -280,7 +280,7 @@ class WindowsHardwareInfo:
             if device_info.get("Bus Type") != "PCI":
                 continue
             
-            device_info.update(self.get_device_location_paths(pnp_device_id))
+            device_info.update(self.get_device_location_paths(device))
             usb_controller_info[self.utils.get_unique_key(device_name, usb_controller_info)] = device_info
 
         return usb_controller_info
@@ -369,7 +369,7 @@ class WindowsHardwareInfo:
             if not device_info.get("Bus Type") in ("PCI", "VID") or " SD " in device_name or "MMC" in device_name:
                 continue
             
-            device_info.update(self.get_device_location_paths(pnp_device_id))
+            device_info.update(self.get_device_location_paths(device))
             storage_controller_info[self.utils.get_unique_key(device_name, storage_controller_info)] = device_info
 
         return storage_controller_info
@@ -432,6 +432,7 @@ class WindowsHardwareInfo:
                 continue
                             
             device_info = self.parse_device_path(pnp_device_id)
+            device_info.update(self.get_device_location_paths(device))
             system_device_info[self.utils.get_unique_key(device_name, system_device_info)] = device_info
 
         return system_device_info
