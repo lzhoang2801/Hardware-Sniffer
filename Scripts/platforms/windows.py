@@ -17,6 +17,7 @@ class WindowsHardwareInfo:
         self.get_device_location_paths = device_locator.WindowsDeviceLocator().get_device_location_paths
         self.utils = utils.Utils()
         self.usb_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "usb.ids"))
+        self.pci_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "pci.ids"))
 
     def parse_device_path(self, device_path):
         if "VEN" in device_path:
@@ -43,7 +44,13 @@ class WindowsHardwareInfo:
             "Bus Type": device_path.split("\\")[0],
             "Device": device_path.split("\\")[1].split("&")[0].split("\\")[0]
         }
-         
+    
+    def unknown_class_device(self, device_name):
+        if self.utils.contains_any(("Video Controller", "Video Adapter", "Graphics Controller"), device_name):
+            return "Display"
+        
+        return None
+
     def pnp_devices(self):
         self.devices_by_class = {
             "Display": [],
@@ -66,6 +73,8 @@ class WindowsHardwareInfo:
             device_name = device.Name or "Unknown"
             device_class = device.PNPClass or "Unknown"
             
+            if device_class in "Unknown":
+                device_class = self.unknown_class_device(device_name) or device_class
             if device_class in "System" and self.utils.contains_any(("LPC ", "eSPI ", "ISA "), device_name):
                 self.chipset_device = device
             if device_class in self.devices_by_class:
@@ -164,12 +173,20 @@ class WindowsHardwareInfo:
         
         for device in self.devices_by_class.get("Display"):
             device_name = device.Name or "Unknown"
+            device_class = device.PNPClass or "Unknown"
             pnp_device_id = device.PNPDeviceID
             
             if not pnp_device_id:
                 continue
             
             device_info = self.classify_gpu(self.parse_device_path(pnp_device_id).get("Device ID"))
+
+            if "Unknown" in (device_name, device_class):
+                try:
+                    device_name = self.pci_ids.get(device_info.get("Device ID")[:4]).get("devices")[device_info.get("Device ID")[5:]]
+                except:
+                    pass
+            
             device_info.update(self.get_device_location_paths(device))
             gpu_info[self.utils.get_unique_key(device_name, gpu_info)] = device_info
 
@@ -440,7 +457,7 @@ class WindowsHardwareInfo:
             system_device_info[self.utils.get_unique_key(device_name, system_device_info)] = device_info
 
         return system_device_info
-        
+
     def hardware_collector(self):
         self.utils.head("Hardware Information Collection")
         print("")
