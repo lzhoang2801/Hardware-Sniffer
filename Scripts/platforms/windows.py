@@ -81,10 +81,10 @@ class WindowsHardwareInfo:
                 self.devices_by_class[device_class].append(device)
             
     def motherboard(self):
-        base_board = c.Win32_BaseBoard()[0]
         computer_system = c.Win32_ComputerSystem()[0]
 
         try:
+            base_board = c.Win32_BaseBoard()[0]
             system_name = " ".join((base_board.Manufacturer.split()[0], base_board.Product)).upper()
         except:
             system_name = " ".join((computer_system.Manufacturer.split()[0], computer_system.Model)).upper()
