@@ -170,35 +170,16 @@ class Utils:
         cols = max(len(line) for line in lines) if lines else 0
         print('\033[8;{};{}t'.format(max(rows+10, 24), max(cols+2, 80)))
 
-    @staticmethod
-    def message(text, msg_type="attention"):
-        # ANSI escape codes for different colors and bold font
-        RED_BOLD = "\033[1;31m"
-        YELLOW_BOLD = "\033[1;33m"
-        CYAN_BOLD = "\033[1;36m"
-        RESET = "\033[0m"
-        
-        if msg_type == "attention":
-            color_code = RED_BOLD
-        elif msg_type == "warning":
-            color_code = YELLOW_BOLD
-        elif msg_type == "reminder":
-            color_code = CYAN_BOLD
-        else:
-            color_code = RESET
-
-        return "{}{}{}".format(color_code, text, RESET)
-
-    def exit_program(self, custom_content=""):
+    def exit_program(self):
         self.head()
-        print(custom_content)
+        print("")
         print("For more information, to report errors, or to contribute to the product:")
         print("* Facebook: https://www.facebook.com/macforce2601")
         print("* Telegram: https://t.me/lzhoang2601")
         print("* GitHub: https://github.com/lzhoang2801/OpCore-Simplify")
         print("")
 
-        print("Thank you for using our program!\n")
-
+        print("Thank you for using our program!")
+        print("")
         self.request_input("Press Enter to exit.")
         sys.exit(0)

@@ -7,6 +7,7 @@ import os
 import platform
 import tempfile
 import shutil
+import traceback
 
 os_name = platform.system()
 
@@ -175,7 +176,11 @@ class HardwareSniffer:
 
 if __name__ == '__main__':
     h = HardwareSniffer()
-    try:
-        h.main()
-    except Exception as e:
-        h.u.exit_program(h.u.message("\nAn error occurred: {}\n".format(e)))
+    while True:
+        try:
+            h.main()
+        except Exception as e:
+            h.u.head("An Error Occurred")
+            print("")
+            print(traceback.format_exc())
+            h.u.request_input()
