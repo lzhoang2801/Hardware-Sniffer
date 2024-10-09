@@ -190,7 +190,7 @@ class WindowsHardwareInfo:
             device_info.update(self.get_device_location_paths(device))
             gpu_info[self.utils.get_unique_key(device_name, gpu_info)] = device_info
 
-        return gpu_info
+        return dict(sorted(gpu_info.items(), key=lambda item: item[1].get("Device Type", "")))
                         
     def monitor(self):
         monitor_info = {}
