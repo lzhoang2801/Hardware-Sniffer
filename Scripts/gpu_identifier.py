@@ -1,10 +1,11 @@
 class GPUIdentifier:
     def identify_intel_graphics(self, hardware_id):
-        gpu_codename = "Unknown"
+        gpu_codename = None
         device_id = hardware_id[5:]
+        device_type = "Integrated GPU"
 
         if device_id.startswith("01"):
-            if device_id[-2] in ["5", "6"]:
+            if device_id[-2] in ("5", "6"):
                 gpu_codename = "Ivy Bridge"
             else:
                 gpu_codename = "Sandy Bridge"
@@ -14,28 +15,53 @@ class GPUIdentifier:
             gpu_codename = "Broadwell"
         elif device_id.startswith(("09", "19")):
             gpu_codename = "Skylake"
-        elif device_id.startswith("59"):
-            if device_id.endswith("17"):
-                gpu_codename = "Kaby Lake-R"
-            else:
-                gpu_codename = "Kaby Lake"
-        elif device_id.startswith("87"):
-            gpu_codename = "Amber Lake"
-        elif device_id.startswith(("3E", "5A")):
-            if device_id.endswith(("A0", "A1")):
-                gpu_codename = "Whiskey Lake"
-            else:
-                gpu_codename = "Coffee Lake"
+        elif device_id.startswith(("0A", "1A", "5A")):
+            gpu_codename = "Apollo Lake"
+        elif device_id.startswith("31"):
+            gpu_codename = "Gemini Lake"
+        elif device_id.startswith(("59", "87C0")):
+            gpu_codename = "Kaby Lake"
+        elif device_id.startswith(("3E", "87", "9B")):
+            gpu_codename = "Coffee Lake"
         elif device_id.startswith("8A"):
             gpu_codename = "Ice Lake"
-        elif device_id.startswith("9B"):
-            gpu_codename = "Comet Lake"
+        elif device_id.startswith("4E"):
+            gpu_codename = "Jasper Lake"
+        elif device_id.startswith("9A"):
+            gpu_codename = "Tiger Lake"
+        elif device_id.startswith("45"):
+            gpu_codename = "Elkhart Lake"
+        elif device_id.startswith("4E"):
+            gpu_codename = "Jasper Lake"
+        elif device_id.startswith("4C"):
+            gpu_codename = "Rocket Lake"
+        elif device_id.startswith("462", "46A"):
+            gpu_codename = "Alder Lake-P"
+        elif device_id.startswith("46D"):
+            gpu_codename = "Alder Lake-N"
+        elif device_id.startswith(("468", "469")):
+            gpu_codename = "Alder Lake-S"
+        elif device_id.startswith("49"):
+            gpu_codename = "DG1"
+            device_type = "Discrete GPU"
+        elif device_id.startswith("A78"):
+            gpu_codename = "Raptor Lake-S"
+        elif device_id.startswith("A7"):
+            gpu_codename = "Raptor Lake-P"
+        elif device_id.startswith("56"):
+            gpu_codename = "Alchemist"
+            device_type = "Discrete GPU"
+        elif device_id.startswith("0B"):
+            gpu_codename = "Ponte Vecchio"
+            device_type = "Discrete GPU"
+        elif device_id.startswith("7D"):
+            gpu_codename = "Meteor Lake"
 
         return {
             "Manufacturer": "Intel",
             "Codename": gpu_codename,
             "Device ID": hardware_id,
-            "Device Type": "Unknown" if gpu_codename == "Unknown" else "Integrated GPU"
+            "Device Type": "Unknown" if not gpu_codename else device_type
         }
 
     def identify_amd_graphics(self, hardware_id):
