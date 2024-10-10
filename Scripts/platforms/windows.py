@@ -176,7 +176,7 @@ class WindowsHardwareInfo:
             device_class = device.PNPClass or "Unknown"
             pnp_device_id = device.PNPDeviceID
             
-            if not pnp_device_id:
+            if not pnp_device_id or not pnp_device_id.startswith("PCI"):
                 continue
             
             device_info = self.classify_gpu(self.parse_device_path(pnp_device_id).get("Device ID"))
