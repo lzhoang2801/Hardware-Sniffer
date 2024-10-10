@@ -223,7 +223,7 @@ class WindowsHardwareInfo:
                     video_output_type = "DP"
                 elif video_output_type == 11:
                     video_output_type = "eDP"
-                elif video_output_type == 2147483648:
+                elif video_output_type == -2147483648:
                     video_output_type = "Internal"
                 else:
                     video_output_type = "Uninitialized"
