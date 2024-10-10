@@ -35,7 +35,7 @@ class GPUIdentifier:
             gpu_codename = "Jasper Lake"
         elif device_id.startswith("4C"):
             gpu_codename = "Rocket Lake"
-        elif device_id.startswith("462", "46A"):
+        elif device_id.startswith(("462", "46A")):
             gpu_codename = "Alder Lake-P"
         elif device_id.startswith("46D"):
             gpu_codename = "Alder Lake-N"
