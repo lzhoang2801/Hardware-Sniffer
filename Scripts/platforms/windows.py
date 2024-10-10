@@ -7,6 +7,7 @@ from .. import utils
 import time
 
 import wmi
+import winreg
 
 c = wmi.WMI()
 
@@ -171,7 +172,51 @@ class WindowsHardwareInfo:
        
     def gpu(self):
         gpu_info = {}
-        
+
+        registry_paths = [
+            r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}",
+            r"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+        ]
+        resize_bar_status = {}
+
+        for base_path in registry_paths:
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base_path) as base_key:
+                    index = 0
+                    
+                    while True:
+                        try:
+                            subkey_name = winreg.EnumKey(base_key, index)
+                            index += 1
+                            subkey_path = f"{base_path}\\{subkey_name}"
+
+                            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, subkey_path) as gpu_key:
+                                is_resize_bar_enabled = False
+                                value_index = 0
+
+                                while True:
+                                    try:
+                                        reg_key, value, reg_type = winreg.EnumValue(gpu_key, value_index)
+                                        value_index += 1
+
+                                        if "rebar" in reg_key.lower() and value == 1:
+                                            is_resize_bar_enabled = True
+                                        elif reg_key == "MatchingDeviceId":
+                                            pnp_device_id = value.upper()
+                                    except OSError:
+                                        break
+                                
+                                if resize_bar_status.get(pnp_device_id, False) == True:
+                                    continue
+                                
+                                resize_bar_status[pnp_device_id] = is_resize_bar_enabled
+                        except OSError:
+                            break
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                continue
+
         for device in self.devices_by_class.get("Display"):
             device_name = device.Name or "Unknown"
             device_class = device.PNPClass or "Unknown"
@@ -189,6 +234,8 @@ class WindowsHardwareInfo:
                     pass
             
             device_info.update(self.get_device_location_paths(device))
+            if resize_bar_status.get(pnp_device_id):
+                device_info["Resizable BAR Enabled"] = resize_bar_status.get(pnp_device_id)
             gpu_info[self.utils.get_unique_key(device_name, gpu_info)] = device_info
 
         return dict(sorted(gpu_info.items(), key=lambda item: item[1].get("Device Type", "")))
