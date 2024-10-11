@@ -54,6 +54,7 @@ class WindowsHardwareInfo:
     def pnp_devices(self):
         self.devices_by_class = {
             "Display": [],
+            "Monitor": [],
             "Net": [],
             "MEDIA": [],
             "USB": [],
@@ -201,8 +202,9 @@ class WindowsHardwareInfo:
             monitor_ids = sorted(wmi_service.WmiMonitorID(), key=lambda x: x.InstanceName)
             connection_params = sorted(wmi_service.WmiMonitorConnectionParams(), key=lambda x: x.InstanceName)
             source_modes = sorted(wmi_service.WmiMonitorListedSupportedSourceModes(), key=lambda x: x.InstanceName)
+            monitor_properties = sorted(self.devices_by_class.get("Monitor"), key=lambda x: x.PNPDeviceID)
 
-            for monitor_id, connection_param, source_modes in zip(monitor_ids, connection_params, source_modes):
+            for monitor_id, connection_param, source_modes, monitor_property in zip(monitor_ids, connection_params, source_modes, monitor_properties):
                 try:
                     user_friendly_name = monitor_id.UserFriendlyName
                     monitor_name = bytes(user_friendly_name).decode('ascii').rstrip('\x00')
@@ -210,6 +212,16 @@ class WindowsHardwareInfo:
                     monitor_name = monitor_id.InstanceName.split("\\")[1]
                 video_output_type = connection_param.VideoOutputTechnology
                 monitor_source_modes = source_modes.MonitorSourceModes
+
+                connected_gpu = None
+                parent_device_id = monitor_property.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data
+                for device in self.devices_by_class.get("Display"):
+                    device_name = device.Name or "Unknown"
+                    pnp_device_id = device.PNPDeviceID
+
+                    if pnp_device_id and pnp_device_id.startswith("PCI") and pnp_device_id.upper() == parent_device_id.upper():
+                        connected_gpu = device_name
+                        break
                 
                 if video_output_type == 0:
                     video_output_type = "VGA"
@@ -235,10 +247,13 @@ class WindowsHardwareInfo:
                     max_h_active = max(max_h_active, monitor_source_mode.HorizontalActivePixels)
                     max_v_active = max(max_v_active, monitor_source_mode.VerticalActivePixels)
                 
-                monitor_info[self.utils.get_unique_key(monitor_name, monitor_info)] = {
+                unique_monitor_name = self.utils.get_unique_key(monitor_name, monitor_info)
+                monitor_info[unique_monitor_name] = {
                     "Connector Type": video_output_type,
                     "Resolution": "{}x{}".format(max_h_active, max_v_active)
                 }
+                if connected_gpu:
+                    monitor_info[unique_monitor_name]["Connected GPU"] = connected_gpu
         except:
             pass
         
