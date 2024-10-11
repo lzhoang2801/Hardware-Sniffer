@@ -5,7 +5,7 @@ from .. import device_locator
 from .. import gpu_identifier
 from .. import utils
 import time
-
+import re
 import wmi
 import winreg
 
@@ -230,8 +230,18 @@ class WindowsHardwareInfo:
                     pass
             
             device_info.update(self.get_device_location_paths(device))
-            if resize_bar_status.get(pnp_device_id):
-                device_info["Resizable BAR Enabled"] = resize_bar_status.get(pnp_device_id)
+
+            def extract_key_parts(device_id):
+                match = re.search(r"VEN_(\w+)&DEV_(\w+)&SUBSYS_(\w+)", device_id)
+                return match.groups() if match else None
+            
+            for gpu_id, resize_bar_enabled in resize_bar_status.items():
+                gpu_parts = extract_key_parts(gpu_id)
+                pnp_parts = extract_key_parts(pnp_device_id)
+
+                if gpu_parts and pnp_parts and gpu_parts == pnp_parts:
+                    device_info["Resizable BAR"] = "Enabled" if resize_bar_enabled else "Disabled"
+
             gpu_info[self.utils.get_unique_key(device_name, gpu_info)] = device_info
 
         return dict(sorted(gpu_info.items(), key=lambda item: item[1].get("Device Type", "")))
