@@ -16,6 +16,7 @@
   <summary>Table of Contents</summary>
   <ol>
     <li><a href="#-features">Features</a></li>
+    <li><a href="#-support-the-project">Support the Project</a></li>
     <li><a href="#-qa">Q&A</a></li>
     <li><a href="#%EF%B8%8F-usage-guide">Usage Guide</a></li>
     <li><a href="#-contributing">Contributing</a></li>
@@ -37,6 +38,20 @@
   - 📌 **CPU Codename Recognition**: Identifies the CPU codename through "Family x Model x Stepping x" without querying Intel ARK or AMD websites.
   - 📌 **GPU Codename Recognition**: Determines the GPU codename using the device ID.
   - 📌 **Input Device Connection Type**: Identifies input devices (e.g., touchpad, touchscreen) connection type (i2c, PS2, SMBus, USB).
+
+---
+
+### ☕ **Support the Project**:
+
+If you love what I'm building, consider buying me a coffee! Your support fuels new features and improvements. ☕✨
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/lzhoang2801">
+    <img src="https://img.buymeacoffee.com/button-api/?text=Donate with Buy Me a Coffee&emoji=☕&slug=lzhoang2801&button_colour=FFDD00&font_colour=000000&font_family=Bree&outline_colour=000000&coffee_colour=ffffff" />
+  </a>
+<p>
+
+Thank you for your support! Every little bit helps! 😊
 
 ---
 
