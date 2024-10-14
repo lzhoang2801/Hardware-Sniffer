@@ -27,12 +27,19 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller wmi
 
-    - name: Build Executable
+    - name: Build Executable (GUI)
       run: |
         pyinstaller --onefile `
         --add-data "Scripts/datasets/usb.ids:Scripts/datasets" `
         --add-data "Scripts/datasets/pci.ids:Scripts/datasets" `
         Hardware-Sniffer.py
+
+    - name: Build Executable (CLI)
+      run: |
+        pyinstaller --onefile `
+        --add-data "Scripts/datasets/usb.ids:Scripts/datasets" `
+        --add-data "Scripts/datasets/pci.ids:Scripts/datasets" `
+        Hardware-Sniffer-CLI.py
 
     - name: Generate Version Number
       id: version
@@ -48,8 +55,25 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ env.version }}
-        files: ./dist/Hardware-Sniffer.exe
+        files: |
+          ./dist/Hardware-Sniffer.exe
+          ./dist/Hardware-Sniffer-CLI.exe
         name: ${{ env.version }}
-        body: ${{ github.event.head_commit.message }}
+        body: |
+          ## **Changelog**
+
+          ---
+
+          - ${{ github.event.head_commit.message }}
+
+          ### **Assets**
+
+          ---
+
+          - **Hardware-Sniffer.exe**:
+            - A simple executable for quick hardware detection, suited for individual users.
+
+          - **Hardware-Sniffer-CLI.exe**:
+            - Command-line interface version designed for seamless integration with OpCore Simplify.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
