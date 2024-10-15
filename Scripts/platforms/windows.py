@@ -249,27 +249,27 @@ class WindowsHardwareInfo:
     def monitor(self):
         monitor_info = {}
 
-        monitor_properties = sorted(self.devices_by_class.get("Monitor"), key=lambda x: x.PNPDeviceID)
+        monitor_properties = self.devices_by_class.get("Monitor")
 
         try:
             wmi_service = wmi.WMI(namespace="root\\wmi")
 
-            monitor_ids = sorted(wmi_service.WmiMonitorID(), key=lambda x: x.InstanceName)
-            connection_params = sorted(wmi_service.WmiMonitorConnectionParams(), key=lambda x: x.InstanceName)
-            source_modes = sorted(wmi_service.WmiMonitorListedSupportedSourceModes(), key=lambda x: x.InstanceName)
+            monitor_ids = wmi_service.WmiMonitorID()
+            connection_params = wmi_service.WmiMonitorConnectionParams()
+            source_modes = wmi_service.WmiMonitorListedSupportedSourceModes()
         except:
             monitor_ids = connection_params = source_modes = []
 
         for monitor_property in monitor_properties:
             try:
-                monitor_id = next((monitor_id for monitor_id in monitor_ids if monitor_id.InstanceName == monitor_property.PNPDeviceID), None)
+                monitor_id = next((monitor_id for monitor_id in monitor_ids if monitor_property.PNPDeviceID in monitor_id.InstanceName.upper()), None)
                 user_friendly_name = monitor_id.UserFriendlyName
                 monitor_name = bytes(user_friendly_name).decode('ascii').rstrip('\x00')
             except:
                 monitor_name = monitor_property.PNPDeviceID.split("\\")[1]
             
             try:
-                connection_param = next((connection_param for connection_param in connection_params if connection_param.InstanceName == monitor_property.PNPDeviceID), None)
+                connection_param = next((connection_param for connection_param in connection_params if monitor_property.PNPDeviceID in connection_param.InstanceName.upper()), None)
                 video_output_type = connection_param.VideoOutputTechnology
 
                 if video_output_type == 0:
@@ -291,16 +291,18 @@ class WindowsHardwareInfo:
             except:
                 video_output_type = "Uninitialized"
 
+            max_h_active = 0
+            max_v_active = 0
+
             try:
-                source_mode = next((source_mode for source_mode in source_modes if source_mode.InstanceName == monitor_property.PNPDeviceID), None)
+                source_mode = next((source_mode for source_mode in source_modes if monitor_property.PNPDeviceID in source_mode.InstanceName.upper()), None)
                 monitor_source_modes = source_mode.MonitorSourceModes
 
                 for monitor_source_mode in monitor_source_modes:
                     max_h_active = max(max_h_active, monitor_source_mode.HorizontalActivePixels)
                     max_v_active = max(max_v_active, monitor_source_mode.VerticalActivePixels)
             except:
-                max_h_active = 0
-                max_v_active = 0
+                pass
 
             connected_gpu = None
             parent_device_id = monitor_property.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data
