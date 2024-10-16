@@ -25,15 +25,8 @@ class HardwareSniffer:
         try:
             source = self.fetcher.fetch_and_parse_content(self.acpi_binary_tools)
             for line in source.split("\n"):
-                if "windows-binary-tools" in line and ">iasl compiler and windows acpi tools" in line.lower():
-                    try:
-                        dl_page_url = "https://www.intel.com" + line.split('<a href="')[1].split('"')[0]
-                        dl_page_source = self.fetcher.fetch_and_parse_content(dl_page_url)
-                        for line in dl_page_source.split("\n"):
-                            if '"download-button"' in line:
-                                return line.split('data-href="')[1].split('"')[0]
-                    except:
-                        return None
+                if "href" in line and ">iasl compiler and windows acpi tools" in line.lower():
+                    return line.split('<a href="')[1].split('"')[0]
         except: pass
         return None
 
