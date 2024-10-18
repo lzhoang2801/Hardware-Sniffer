@@ -59,7 +59,7 @@ class GPUIdentifier:
 
         return {
             "Manufacturer": "Intel",
-            "Codename": gpu_codename,
+            "Codename": gpu_codename or "Unknown",
             "Device ID": hardware_id,
             "Device Type": "Unknown" if not gpu_codename else device_type
         }
@@ -219,7 +219,7 @@ class GPUIdentifier:
 
         return {
             "Manufacturer": "AMD",
-            "Codename": gpu_codename,
+            "Codename": gpu_codename or "Unknown",
             "Device ID": hardware_id,
             "Device Type": "Unknown" if not gpu_codename else device_type
         }
