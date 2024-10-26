@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from Scripts import github
 from Scripts import resource_fetcher
 from Scripts import run
 from Scripts import utils
@@ -13,46 +14,21 @@ os_name = platform.system()
 
 class HardwareSniffer:
     def __init__(self):
+        self.github = github.Github()
         self.fetcher = resource_fetcher.ResourceFetcher()
         self.run = run.Run().run
         self.u = utils.Utils()
         self.temporary_dir = tempfile.mkdtemp()
-        self.acpi_binary_tools = "https://www.intel.com/content/www/us/en/developer/topic-technology/open/acpica/download.html"
         self.result_dir = os.path.join(os.getcwd(), "Results")
         self.report_path = os.path.join(self.result_dir, "Report.json")
 
-    def get_latest_acpi_binary_tools(self):
-        # Source: https://github.com/corpnewt/SSDTTime/blob/64446d553fcbc14a4e6ebf3d8d16e3357b5cbf50/Scripts/dsdt.py#L243C5-L273C20
+    def get_latest_acpidump(self):
+        latest_release = self.github.get_latest_release("acpica", "acpica") or {}
         
-        # Helper to scrape https://www.intel.com/content/www/us/en/developer/topic-technology/open/acpica/download.html for the latest
-        # download binaries link - then scrape the contents of that page for the actual download as needed
-        try:
-            source = self.fetcher.fetch_and_parse_content(self.acpi_binary_tools)
-            for line in source.split("\n"):
-                if '<a href="' in line and ">iasl compiler and windows acpi tools" in line.lower():
-                    # Check if we have a direct download link - i.e. ends with .zip - or if we're
-                    # redirected to a different download page - i.e. ends with .html
-                    dl_link = line.split('<a href="')[1].split('"')[0]
-                    if dl_link.lower().endswith(".zip"):
-                        # Direct download - return as-is
-                        return dl_link
-                    elif dl_link.lower().endswith((".html",".htm")):
-                        # Redirect - try to scrape for a download link
-                        try:
-                            if dl_link.lower().startswith(("http:","https:")):
-                                # The existing link is likely complete - use it as-is
-                                dl_page_url = dl_link
-                            else:
-                                # <a href="/content/www/us/en/download/774881/acpi-component-architecture-downloads-windows-binary-tools.html">iASL Compiler and Windows ACPI Tools
-                                # Only a suffix - prepend to it
-                                dl_page_url = "https://www.intel.com" + line.split('<a href="')[1].split('"')[0]
-                            dl_page_source = self.dl.get_string(dl_page_url, progress=False, headers=self.h)
-                            for line in dl_page_source.split("\n"):
-                                if 'data-href="' in line and '"download-button"' in line:
-                                    # Should have the right line
-                                    return line.split('data-href="')[1].split('"')[0]
-                        except: pass
-        except: pass
+        for asset in latest_release.get("assets"):
+            if asset.get("product_name") == "acpidump":
+                return asset.get("url")
+            
         return None
 
     def check_acpidump(self):
@@ -63,24 +39,18 @@ class HardwareSniffer:
         
         self.u.head("Gathering Files")
         print("")
-        print("Please wait for download ACPI Binary Tools...")
+        print("Please wait for download acpidump...")
         print("")
         
-        acpi_binary_tools_url = self.get_latest_acpi_binary_tools()
-        if not acpi_binary_tools_url: 
-            raise Exception("Could not get latest ACPI Binary Tools for Windows")
-        
-        self.u.create_folder(self.temporary_dir)
-        zip_path = os.path.join(self.temporary_dir, os.path.basename(acpi_binary_tools_url))
-        self.fetcher.download_and_save_file(acpi_binary_tools_url, zip_path)
-        self.u.extract_zip_file(zip_path)
+        acpidump_download_link = self.get_latest_acpidump()
+        if not acpidump_download_link: 
+            raise Exception("Could not get latest acpidump")
         
         try:
-            source_acpidump_path = os.path.join(self.temporary_dir, self.u.find_matching_paths(self.temporary_dir, name_filter="acpidump")[0][0])
-            shutil.move(source_acpidump_path, acpidump_path)
+            self.fetcher.download_and_save_file(acpidump_download_link, acpidump_path)
         except:
             raise Exception("Could not locate or download acpidump.exe!\n\nPlease manually download acpidump.exe from:\n - {}\n\nAnd place in:\n - {}\n".format(
-                self.acpi_binary_tools,
+                "https://github.com/acpica/acpica/releases",
                 os.path.dirname(os.path.realpath(__file__))
             ))
             

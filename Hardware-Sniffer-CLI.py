@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from Scripts import github
 from Scripts import resource_fetcher
 from Scripts import run
 from Scripts import utils
@@ -14,21 +15,21 @@ os_name = platform.system()
 
 class HardwareSniffer:
     def __init__(self, results_dir):
+        self.github = github.Github()
         self.fetcher = resource_fetcher.ResourceFetcher()
         self.run = run.Run().run
         self.u = utils.Utils()
         self.temporary_dir = tempfile.mkdtemp()
-        self.acpi_binary_tools = "https://www.intel.com/content/www/us/en/developer/topic-technology/open/acpica/download.html"
         self.results_dir = results_dir
         self.report_path = os.path.join(self.results_dir, "Report.json")
 
-    def get_latest_acpi_binary_tools(self):
-        try:
-            source = self.fetcher.fetch_and_parse_content(self.acpi_binary_tools)
-            for line in source.split("\n"):
-                if "href" in line and ">iasl compiler and windows acpi tools" in line.lower():
-                    return line.split('<a href="')[1].split('"')[0]
-        except: pass
+    def get_latest_acpidump(self):
+        latest_release = self.github.get_latest_release("acpica", "acpica") or {}
+        
+        for asset in latest_release.get("assets"):
+            if asset.get("product_name") == "acpidump":
+                return asset.get("url")
+            
         return None
 
     def check_acpidump(self):
@@ -39,24 +40,18 @@ class HardwareSniffer:
         
         print("Gathering Files")
         print("")
-        print("Please wait for download ACPI Binary Tools...")
+        print("Please wait for download acpidump...")
         print("")
         
-        acpi_binary_tools_url = self.get_latest_acpi_binary_tools()
-        if not acpi_binary_tools_url: 
-            raise Exception("Could not get latest ACPI Binary Tools for Windows")
-        
-        self.u.create_folder(self.temporary_dir)
-        zip_path = os.path.join(self.temporary_dir, os.path.basename(acpi_binary_tools_url))
-        self.fetcher.download_and_save_file(acpi_binary_tools_url, zip_path)
-        self.u.extract_zip_file(zip_path)
+        acpidump_download_link = self.get_latest_acpidump()
+        if not acpidump_download_link: 
+            raise Exception("Could not get latest acpidump")
         
         try:
-            source_acpidump_path = os.path.join(self.temporary_dir, self.u.find_matching_paths(self.temporary_dir, name_filter="acpidump")[0][0])
-            shutil.move(source_acpidump_path, acpidump_path)
+            self.fetcher.download_and_save_file(acpidump_download_link, acpidump_path)
         except:
             raise Exception("Could not locate or download acpidump.exe!\n\nPlease manually download acpidump.exe from:\n - {}\n\nAnd place in:\n - {}\n".format(
-                self.acpi_binary_tools,
+                "https://github.com/acpica/acpica/releases",
                 os.path.dirname(os.path.realpath(__file__))
             ))
             
