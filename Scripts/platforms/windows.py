@@ -232,7 +232,7 @@ class WindowsHardwareInfo:
             device_info.update(self.get_device_location_paths(device))
 
             def extract_key_parts(device_id):
-                match = re.search(r"VEN_(\w+)&DEV_(\w+)&SUBSYS_(\w+)", device_id)
+                match = re.search(r"VEN_(\w+)&DEV_(\w+)", device_id)
                 return match.groups() if match else None
             
             for gpu_id, resize_bar_enabled in resize_bar_status.items():
