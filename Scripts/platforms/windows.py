@@ -83,13 +83,22 @@ class WindowsHardwareInfo:
                 self.devices_by_class[device_class].append(device)
             
     def motherboard(self):
-        computer_system = c.Win32_ComputerSystem()[0]
+        manufacturer = model = "Unknown"
 
         try:
             base_board = c.Win32_BaseBoard()[0]
-            system_name = " ".join((base_board.Manufacturer.split()[0], base_board.Product)).upper()
-        except:
-            system_name = " ".join((computer_system.Manufacturer.split()[0], computer_system.Model)).upper()
+            manufacturer = base_board.Manufacturer
+            model = base_board.Product
+        except: pass
+
+        try:
+            computer_system = c.Win32_ComputerSystem()[0]
+            manufacturer = computer_system.Manufacturer
+            model = computer_system.Model
+        except: pass
+
+        manufacturer = manufacturer.split(" ")[0]
+        system_name = (" ".join(item for item in (manufacturer, model) if not "unknown" in item.lower()) or model).upper()
 
         try:
             device_id = self.parse_device_path(self.chipset_device.PNPDeviceID).get("Device ID")
