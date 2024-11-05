@@ -21,30 +21,39 @@ class WindowsHardwareInfo:
         self.pci_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "pci.ids"))
 
     def parse_device_path(self, device_path):
-        if "VEN" in device_path:
-            return {
-                "Bus Type": device_path.split("\\")[0],
-                "Device ID": "{}-{}".format(device_path.split("VEN_")[-1].split("&")[0], device_path.split("DEV_")[-1].split("&")[0].split("\\")[0])
-            }
+        device_info = {}
         
-        if "VID" in device_path:
-            return {
-                "Bus Type": device_path.split("\\")[0],
-                "Device ID": "{}-{}".format(device_path.split("VID_")[-1].split("&")[0], device_path.split("PID_")[-1].split("&")[0].split("\\")[0])
-            }
+        parts = device_path.split("\\")
         
-        if device_path.startswith("HID"):
-            device_id = device_path.split("\\")[1].split("&")[0]
-            idx = 3 if len(device_id) == 7 else 4
-            return {
-                "Bus Type": device_path.split("\\")[0],
-                "Device ID": "{}-{}".format(device_id[:idx], device_id[idx:]) if len(device_id) < 9 else device_id
-            }
+        device_info["Bus Type"] = parts[0]
         
-        return {
-            "Bus Type": device_path.split("\\")[0],
-            "Device": device_path.split("\\")[1].split("&")[0].split("\\")[0]
-        }
+        if "&" not in parts[1]:
+            device_info["Device"] = parts[1]
+            return device_info
+
+        vendor_id, device_id, product_id, hid_id, subsystem_id = None, None, None, None, None
+    
+        for segment in parts[1].replace("_", "").split("&"):
+            if segment.startswith("VEN"):
+                vendor_id = segment.split("VEN")[-1].zfill(4)
+            elif segment.startswith("DEV"):
+                device_id = segment.split("DEV")[-1]
+            elif segment.startswith("VID"):
+                vendor_id = segment.split("VID")[-1].zfill(4)
+            elif segment.startswith("PID"):
+                product_id = segment.split("PID")[-1]
+            elif segment.startswith("HID"):
+                hid_id = segment.split("HID")[-1]
+            elif segment.startswith("SUBSYS"):
+                subsystem_id = segment.split("SUBSYS")[-1]
+        
+        if vendor_id and device_id or product_id or hid_id:
+            device_info["Device ID"] = "{}-{}".format(vendor_id, device_id or product_id or hid_id)
+
+        if subsystem_id:
+            device_info["Subsystem ID"] = subsystem_id
+        
+        return device_info
     
     def unknown_class_device(self, device_name):
         if self.utils.contains_any(("Video Controller", "Video Adapter", "Graphics Controller"), device_name):
