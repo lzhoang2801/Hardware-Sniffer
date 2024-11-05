@@ -239,7 +239,9 @@ class WindowsHardwareInfo:
             if not pnp_device_id or not pnp_device_id.startswith("PCI"):
                 continue
             
-            device_info = self.classify_gpu(self.parse_device_path(pnp_device_id).get("Device ID"))
+            device_info = self.parse_device_path(pnp_device_id)
+            del device_info["Bus Type"]
+            device_info = {**self.classify_gpu(device_info.get("Device ID")), **device_info}
 
             if "Unknown" in (device_name, device_class):
                 try:
