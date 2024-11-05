@@ -487,6 +487,11 @@ class WindowsHardwareInfo:
             device_info = self.parse_device_path(pnp_device_id)
             if not device_info.get("Bus Type") in ("PCI", "VID") or " SD " in device_name or "MMC" in device_name:
                 continue
+
+            try:
+                device_name = self.pci_ids.get(device_info.get("Device ID")[:4]).get("devices")[device_info.get("Device ID")[5:]]
+            except:
+                pass
             
             device_info.update(self.get_device_location_paths(device))
             storage_controller_info[self.utils.get_unique_key(device_name, storage_controller_info)] = device_info
