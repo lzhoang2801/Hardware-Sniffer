@@ -8,6 +8,7 @@ import time
 import re
 import wmi
 import winreg
+import struct
 
 c = wmi.WMI()
 
@@ -144,7 +145,13 @@ class WindowsHardwareInfo:
         
         return False
     
-    def get_simd_features(self):
+    def get_cpu_name(self, cpuid):
+        name = "".join((struct.pack("IIII", *cpuid(0x80000000 + i)).decode("utf-8")
+                        for i in range(2, 5)))
+
+        return name.split('\x00', 1)[0]
+    
+    def get_simd_features(self, cpuid):
         simd_features_map = {
             "SSE": (1, 0, 3, 25),
             "SSE2": (1, 0, 3, 26),
@@ -157,20 +164,20 @@ class WindowsHardwareInfo:
             "AVX2": (7, 0, 1, 5)
         }
 
-        cpu = cpuid.CPUID()
         simd_feature_support = []
 
         for feature, address in simd_features_map.items():
-            if self.is_set(cpu, *address):
+            if self.is_set(cpuid, *address):
                 simd_feature_support.append(feature)
 
         return ", ".join(simd_feature_support) if simd_feature_support else "SIMD Capabilities Unknown"
     
     def cpu(self):
         cpus = c.Win32_Processor()
+        cpuid = cpuid.CPUID()
    
         cpu_brand = cpus[-1].Manufacturer
-        cpu_model = cpus[-1].Name.split("CPU")[0].strip()
+        cpu_model = self.get_cpu_name(cpuid)
         cpu_description = cpus[-1].Description
         number_of_cores = cpus[-1].NumberOfCores or 0
 
@@ -185,7 +192,7 @@ class WindowsHardwareInfo:
             "Codename": self.lookup_codename(cpu_model, cpu_description),
             "Core Count": str(number_of_cores * len(cpus)).zfill(2),
             "CPU Count": str(len(cpus)).zfill(2),
-            "SIMD Features": self.get_simd_features()
+            "SIMD Features": self.get_simd_features(cpuid)
         }
        
     def gpu(self):
