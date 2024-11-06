@@ -33,7 +33,7 @@ class HardwareSniffer:
         return None
 
     def check_acpidump(self):
-        acpidump_path = self.u.get_full_path("Scripts", "acpidump.exe")
+        acpidump_path = os.path.join(os.getcwd(), "acpidump.exe")
 
         if os.path.exists(acpidump_path):
             return acpidump_path
