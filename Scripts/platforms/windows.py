@@ -47,8 +47,10 @@ class WindowsHardwareInfo:
             elif segment.startswith("SUBSYS"):
                 subsystem_id = segment.split("SUBSYS")[-1]
         
-        if vendor_id and device_id or product_id or hid_id:
+        if vendor_id and (device_id or product_id or hid_id):
             device_info["Device ID"] = "{}-{}".format(vendor_id, device_id or product_id or hid_id)
+        elif len(parts[1].split("&")[0]) in (7, 8):
+            device_info["Device"] = parts[1].split("&")[0]
 
         if subsystem_id:
             device_info["Subsystem ID"] = subsystem_id
@@ -413,7 +415,8 @@ class WindowsHardwareInfo:
             "i8042prt": "PS/2",
             "kbdclass": "PS/2",
             "kbdhid": "USB",
-            "mouhid": "USB"
+            "mouhid": "USB",
+            "HidUsb": "USB"
         }
 
         self.devices_by_class["HIDClass"] = sorted(self.devices_by_class.get("HIDClass"), key=lambda item:item.PNPDeviceID.split("\\")[1])
@@ -425,12 +428,10 @@ class WindowsHardwareInfo:
             pnp_device_id = device.PNPDeviceID
 
             device_info = self.parse_device_path(pnp_device_id)
-            
-            if device_info.get("Device"):
-                idx = 3 if len(device_info.get("Device")) == 7 else 4
-                device_info["Device ID"] = device_info["Device"][:idx] + "-" + device_info["Device"][idx:]
 
-            if self.utils.contains_any(("wireless radio controls", "vendor-defined device", "consumer control device", "system controller"), device_name) or device.ConfigManagerErrorCode != 0 or not pnp_device_id:
+            device_id = (device_info.get("Device") or device_info.get("Device ID") or "").replace("-", "")
+
+            if self.utils.contains_any(("wireless radio controls", "vendor-defined device", "consumer control device", "system controller"), device_name) or device.ConfigManagerErrorCode != 0 or not device_id:
                 continue
 
             try:
@@ -444,23 +445,18 @@ class WindowsHardwareInfo:
             if device.PNPClass == "HIDClass":
                 if device_info.get("Bus Type") == "ACPI":
                     acpi_device = {
-                        **device_info,
+                        "Bus Type": device_info.get("Bus Type"),
+                        "Device": device_id,
                         "Device Type": device_name
                     }
                     continue
-                elif acpi_device and device_info.get("Device ID") == acpi_device.get("Device ID"):
+                elif acpi_device and device_id == acpi_device.get("Device"):
                     device_info.update(acpi_device)
 
-            if device_info.get("Device ID", device_info.get("Device ID")) in seen_ids:
+            if device_id in seen_ids or not device_info.get("Bus Type") in ("ACPI", "USB", "HID") or not device_info.get("Device Type"):
                 continue
 
-            try:
-                if not device_info.get("Bus Type") in ("ACPI", "USB", "HID") or not device_info.get("Device Type") or device_info.get("Device ID").index("-") > 4:
-                    continue
-            except:
-                continue
-
-            seen_ids.add(device_info.get("Device ID"))
+            seen_ids.add(device_id)
 
             if not device_info.get("Bus Type") in ("ACPI"):
                 try:
@@ -469,8 +465,6 @@ class WindowsHardwareInfo:
                     pass
                 device_info["Bus Type"] = "USB"
                 del device_info["Device Type"]
-            else:
-                del device_info["Device ID"]
 
             input_info[self.utils.get_unique_key(device_name, input_info)] = device_info
 
