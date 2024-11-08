@@ -132,7 +132,7 @@ class WindowsHardwareInfo:
 
             self.chipset_model
         except:
-            chipset_model = "Unknown"
+            self.chipset_model = "Unknown"
 
         system_platform = computer_system.PCSystemType
         
@@ -145,7 +145,7 @@ class WindowsHardwareInfo:
                 
         return {
             "Name": system_name,
-            "Chipset": chipset_model,
+            "Chipset": self.chipset_model,
             "Platform": system_platform
         }
 
