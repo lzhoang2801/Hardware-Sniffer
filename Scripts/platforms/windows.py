@@ -1,4 +1,5 @@
 from ..datasets import chipset_data
+from ..datasets import pci_data
 from .. import cpu_identifier
 from .. import cpuid
 from .. import device_locator
@@ -57,11 +58,17 @@ class WindowsHardwareInfo:
         
         return device_info
     
-    def unknown_class_device(self, device_name):
-        if self.utils.contains_any(("Video Controller", "Video Adapter", "Graphics Controller"), device_name):
+    def unknown_class_device(self, device_id):
+        if device_id in pci_data.BluetoothIDs:
+            return "Bluetooth"
+        elif device_id in pci_data.NetworkIDs:
+            return "Net"
+        elif device_id in pci_data.RealtekCardReaderIDs:
+            return "SDHost"
+        elif self.classify_gpu(device_id).get("Codename") != "Unknown":
             return "Display"
         
-        return None
+        return "Unknown"
 
     def pnp_devices(self):
         self.devices_by_class = {
@@ -84,13 +91,17 @@ class WindowsHardwareInfo:
         }
 
         for device in c.Win32_PnPEntity():
-            device_name = device.Name or "Unknown"
             device_class = device.PNPClass or "Unknown"
+            pnp_device_id = device.PNPDeviceID or None
+
+            if pnp_device_id:
+                device_info = self.parse_device_path(pnp_device_id)
             
-            if device_class in "Unknown":
-                device_class = self.unknown_class_device(device_name) or device_class
-            if device_class in "System" and self.utils.contains_any(("LPC ", "eSPI ", "ISA "), device_name):
-                self.chipset_device = device
+                if device_class in "Unknown":
+                    device_class = self.unknown_class_device(device_info.get("Device ID"))
+                elif device_class in "System" and chipset_data.get(device_info.get("Device ID")):
+                    self.chipset_model = chipset_data.get(device_info.get("Device ID"))
+
             if device_class in self.devices_by_class:
                 self.devices_by_class[device_class].append(device)
             
@@ -113,16 +124,14 @@ class WindowsHardwareInfo:
         system_name = (" ".join(item for item in (manufacturer, model) if not "unknown" in item.lower()) or model).upper()
 
         try:
-            device_id = self.parse_device_path(self.chipset_device.PNPDeviceID).get("Device ID")
+            for chipset_name in chipset_data.amd_chipsets:
+                if chipset_name in system_name:
+                    self.chipset_model = chipset_name
+                    break
 
-            chipset_model = chipset_data.chipset_controllers[device_id]
+            self.chipset_model
         except:
             chipset_model = "Unknown"
-
-        for chipset_name in chipset_data.amd_chipsets:
-            if chipset_name in system_name:
-                chipset_model = chipset_name
-                break
 
         system_platform = computer_system.PCSystemType
         
