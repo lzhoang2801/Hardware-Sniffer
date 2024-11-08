@@ -69,6 +69,7 @@ class WindowsHardwareInfo:
             "Monitor": [],
             "Net": [],
             "MEDIA": [],
+            "AudioEndpoint": [],
             "USB": [],
             "HIDClass": [],
             "Keyboard": [],
@@ -370,6 +371,17 @@ class WindowsHardwareInfo:
         return network_info
                
     def sound(self):
+        audio_endpoints = {}
+
+        for endpoint in self.devices_by_class.get("AudioEndpoint"):
+            endpoint_name = (endpoint.Name or "Unknown").split(" (")[0]
+            parent_device_id = endpoint.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
+
+            if parent_device_id not in audio_endpoints:
+                audio_endpoints[parent_device_id] = []
+
+            audio_endpoints[parent_device_id].append(endpoint_name)
+
         sound_info = {}
 
         for device in self.devices_by_class.get("MEDIA"):
@@ -383,6 +395,13 @@ class WindowsHardwareInfo:
             
             if not device_info.get("Bus Type").endswith(("AUDIO", "USB", "ACP")):
                 continue
+
+            if audio_endpoints.get(pnp_device_id):
+                device_info["Audio Endpoints"] = audio_endpoints.get(pnp_device_id)
+
+            system_device_id = device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
+
+            device_info["Controller Device ID"] = self.parse_device_path(system_device_id).get("Device ID")
             
             sound_info[self.utils.get_unique_key(device_name, sound_info)] = device_info
 
