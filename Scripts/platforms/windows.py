@@ -99,8 +99,8 @@ class WindowsHardwareInfo:
             
                 if device_class in "Unknown":
                     device_class = self.unknown_class_device(device_info.get("Device ID"))
-                elif device_class in "System" and chipset_data.get(device_info.get("Device ID")):
-                    self.chipset_model = chipset_data.get(device_info.get("Device ID"))
+                elif device_class in "System" and chipset_data.chipset_controllers.get(device_info.get("Device ID")):
+                    self.chipset_model = chipset_data.chipset_controllers.get(device_info.get("Device ID"))
 
             if device_class in self.devices_by_class:
                 self.devices_by_class[device_class].append(device)
