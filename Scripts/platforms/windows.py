@@ -58,14 +58,14 @@ class WindowsHardwareInfo:
         
         return device_info
     
-    def unknown_class_device(self, device_id):
+    def unknown_class_device(self, device_name, device_id):
         if device_id in pci_data.BluetoothIDs:
             return "Bluetooth"
         elif device_id in pci_data.NetworkIDs:
             return "Net"
         elif device_id in pci_data.RealtekCardReaderIDs:
             return "SDHost"
-        elif self.classify_gpu(device_id).get("Codename") != "Unknown":
+        elif self.utils.contains_any(("Video Controller", "Video Adapter", "Graphics Controller"), device_name) and self.classify_gpu(device_id).get("Codename") != "Unknown":
             return "Display"
         
         return "Unknown"
@@ -91,6 +91,7 @@ class WindowsHardwareInfo:
         }
 
         for device in c.Win32_PnPEntity():
+            device_name = device.Name or "Unknown"
             device_class = device.PNPClass or "Unknown"
             pnp_device_id = device.PNPDeviceID or None
 
@@ -99,7 +100,7 @@ class WindowsHardwareInfo:
 
                 if device_info.get("Device ID"):
                     if device_class in "Unknown":
-                        device_class = self.unknown_class_device(device_info.get("Device ID"))
+                        device_class = self.unknown_class_device(device_name, device_info.get("Device ID"))
                     elif device_class in "System" and chipset_data.chipset_controllers.get(device_info.get("Device ID")):
                         self.chipset_model = chipset_data.chipset_controllers.get(device_info.get("Device ID"))
 
