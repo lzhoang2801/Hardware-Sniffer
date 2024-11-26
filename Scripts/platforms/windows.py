@@ -380,41 +380,60 @@ class WindowsHardwareInfo:
             network_info[self.utils.get_unique_key(device_name, network_info)] = device_info
 
         return network_info
-               
+
+    def _find_controller_device_id(self, initial_parent_id):
+        for system_device in self.devices_by_class.get("System", []):
+            system_pnp_id = system_device.PNPDeviceID
+
+            if not system_pnp_id or system_pnp_id != initial_parent_id:
+                continue
+
+            try:
+                parent_id = system_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
+                return self.parse_device_path(parent_id).get("Device ID")
+            except Exception:
+                continue
+
+        return self.parse_device_path(initial_parent_id).get("Device ID")
+
     def sound(self):
-        audio_endpoints = {}
+        audio_endpoints_by_parent = {}
 
-        for endpoint in self.devices_by_class.get("AudioEndpoint"):
-            endpoint_name = (endpoint.Name or "Unknown").split(" (")[0]
-            parent_device_id = endpoint.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
+        for audio_device in self.devices_by_class.get("AudioEndpoint", []):
+            audio_name = (audio_device.Name or "Unknown").split(" (")[0]
+            parent_id = audio_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
 
-            if parent_device_id not in audio_endpoints:
-                audio_endpoints[parent_device_id] = []
+            if parent_id not in audio_endpoints_by_parent:
+                audio_endpoints_by_parent[parent_id] = []
 
-            audio_endpoints[parent_device_id].append(endpoint_name)
+            audio_endpoints_by_parent[parent_id].append(audio_name)
 
         sound_info = {}
 
-        for device in self.devices_by_class.get("MEDIA"):
-            device_name = device.Name or "Unknown"
-            pnp_device_id = device.PNPDeviceID
-            
-            if not pnp_device_id:
-                continue
-                            
-            device_info = self.parse_device_path(pnp_device_id)
-            
-            if not device_info.get("Bus Type").endswith(("AUDIO", "USB", "ACP")):
+        for media_device in self.devices_by_class.get("MEDIA", []):
+            media_name = media_device.Name or "Unknown"
+            pnp_id = media_device.PNPDeviceID
+
+            if not pnp_id:
                 continue
 
-            if audio_endpoints.get(pnp_device_id):
-                device_info["Audio Endpoints"] = audio_endpoints.get(pnp_device_id)
+            media_device_info = self.parse_device_path(pnp_id)
 
-            system_device_id = device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
+            if not media_device_info.get("Bus Type", "").endswith(("AUDIO", "USB", "ACP")):
+                continue
 
-            device_info["Controller Device ID"] = self.parse_device_path(system_device_id).get("Device ID")
-            
-            sound_info[self.utils.get_unique_key(device_name, sound_info)] = device_info
+            if pnp_id in audio_endpoints_by_parent:
+                media_device_info["Audio Endpoints"] = audio_endpoints_by_parent[pnp_id]
+
+            parent_id = media_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
+
+            controller_device_id = self._find_controller_device_id(parent_id)
+
+            if controller_device_id:
+                media_device_info["Controller Device ID"] = controller_device_id
+
+            unique_key = self.utils.get_unique_key(media_name, sound_info)
+            sound_info[unique_key] = media_device_info
 
         return sound_info
             
