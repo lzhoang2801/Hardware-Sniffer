@@ -380,21 +380,22 @@ class WindowsHardwareInfo:
             network_info[self.utils.get_unique_key(device_name, network_info)] = device_info
 
         return network_info
+    
+    def _find_controller_device_id(self, current_device):        
+        system_device_by_pnp_id = {device.PNPDeviceID: device for device in self.devices_by_class.get("System", []) if device.PNPDeviceID}
 
-    def _find_controller_device_id(self, initial_parent_id):
-        for system_device in self.devices_by_class.get("System", []):
-            system_pnp_id = system_device.PNPDeviceID
-
-            if not system_pnp_id or system_pnp_id != initial_parent_id:
-                continue
-
+        while current_device:
             try:
-                parent_id = system_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
-                return self.parse_device_path(parent_id).get("Device ID")
-            except Exception:
-                continue
+                parent_id = current_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
 
-        return self.parse_device_path(initial_parent_id).get("Device ID")
+                if parent_id.startswith("PCI"):
+                    return self.parse_device_path(parent_id).get("Device ID")
+
+                current_device = system_device_by_pnp_id.get(parent_id)
+            except:
+                break
+
+        return None
 
     def sound(self):
         audio_endpoints_by_parent = {}
@@ -425,9 +426,7 @@ class WindowsHardwareInfo:
             if pnp_id in audio_endpoints_by_parent:
                 media_device_info["Audio Endpoints"] = audio_endpoints_by_parent[pnp_id]
 
-            parent_id = media_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
-
-            controller_device_id = self._find_controller_device_id(parent_id)
+            controller_device_id = self._find_controller_device_id(media_device)
 
             if controller_device_id:
                 media_device_info["Controller Device ID"] = controller_device_id
