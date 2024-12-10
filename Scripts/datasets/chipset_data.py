@@ -137,6 +137,7 @@ chipset_controllers = {
     "8086-A1CB": "Lewisburg",
     "8086-A242": "Lewisburg",
     "8086-A243": "Lewisburg",
+    "8086-9D4B": "Sunrise Point-LP",
     "8086-9D43": "Sunrise Point-LP",
     "8086-9D46": "Sunrise Point-LP",
     "8086-9D48": "Sunrise Point-LP",
