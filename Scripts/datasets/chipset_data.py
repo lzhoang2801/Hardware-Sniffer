@@ -271,6 +271,7 @@ chipset_controllers = {
     "8086-7A8A": "W790",
     "8086-7E01": "Meteor Lake-P",
     "8086-A806": "Lunar Lake-M",
+    "8086-7F04": "Z890",
     "1022-790E": "AMD"
 }
 
