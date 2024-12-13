@@ -1,46 +1,53 @@
 from Scripts import resource_fetcher
 from Scripts import utils
+import random
 
 class Github:
     def __init__(self):
         self.utils = utils.Utils()
-        # Set the headers for GitHub API requests
         self.headers = {
-            "Accept": "application/vnd.github+json",
-            "#Authorization": "token GITHUB_TOKEN",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         self.fetcher = resource_fetcher.ResourceFetcher(self.headers)
 
     def get_latest_release(self, owner, repo):
-        url = "https://api.github.com/repos/{}/{}/releases".format(owner, repo)
+        url = "https://github.com/{}/{}/releases".format(owner, repo)
+        response = self.fetcher.fetch_and_parse_content(url)
 
-        response = self.fetcher.fetch_and_parse_content(url, "json")
-        
-        try:
-            latest_release = response[0]
-        except:
-            return
-        
-        if not isinstance(latest_release, dict):
-            return
-        
+        body = ""
+        tag_name = None
         assets = []
+        
+        for line in response.splitlines():
+            if "<a" in line and "href=\"" in line and "/releases/tag/" in line and not tag_name:
+                tag_name = line.split("/releases/tag/")[1].split("\"")[0]
+            elif "<div" in line and "body-content" in line:
+                body = response.split(line.split(">", 1)[0], 1)[1].split("</div>", 1)[0][1:]
+                break
 
-        for asset in response[0].get("assets"):
-            asset_id = asset.get("id")
-            download_url = asset.get("browser_download_url")
-            asset_name = self.extract_asset_name(asset.get("name"))
+        release_tag_url = "https://github.com/{}/{}/releases/expanded_assets/{}".format(owner, repo, tag_name)
+        response = self.fetcher.fetch_and_parse_content(release_tag_url)
 
-            if "tlwm" in download_url or ("tlwm" not in download_url and "DEBUG" not in download_url.upper()):
-                assets.append({
-                    "product_name": asset_name, 
-                    "id": asset_id, 
-                    "url": download_url
-                })
+        for line in response.splitlines():
+            if "<a" in line and "href=\"" in line and "/releases/download" in line:
+                download_link = line.split("href=\"", 1)[1].split("\"", 1)[0]
+
+                if "tlwm" in download_link or ("tlwm" not in download_link and "DEBUG" not in download_link.upper()):
+                    asset_data = response.split(line)[1].split("</div>", 2)[1]
+
+                    try:
+                        asset_id = "".join(char for char in asset_data.split("datetime=\"")[-1].split("\"")[0][::-1] if char.isdigit())[:9]
+                    except:
+                        asset_id = "".join(random.choices('0123456789', k=9))
+
+                    assets.append({
+                        "product_name": self.extract_asset_name(download_link.split("/")[-1]), 
+                        "id": int(asset_id), 
+                        "url": "https://github.com" + download_link
+                    })
 
         return {
-            "describe": latest_release.get("body"),
+            "body": body,
             "assets": assets
         }
     
