@@ -90,11 +90,17 @@ class GPUIdentifier:
         elif device_id.startswith("164E"):
             gpu_codename = "Raphael"
             device_type = "Integrated GPU"
-        elif device_id.startswith("164D"):
+        elif device_id.startswith("1681"):
             gpu_codename = "Rembrandt"
             device_type = "Integrated GPU"
-        elif device_id.startswith(("164F", "19")):
+        elif device_id.startswith(("15BF", "15C8", "1900")):
             gpu_codename = "Phoenix"
+            device_type = "Integrated GPU"
+        elif device_id.startswith("1506"):
+            gpu_codename = "Mendocino"
+            device_type = "Integrated GPU"
+        elif device_id.startswith("13C0"):
+            gpu_codename = "Granite Ridge"
             device_type = "Integrated GPU"
         elif device_id.startswith("94C"):
             gpu_codename = "RV610"
