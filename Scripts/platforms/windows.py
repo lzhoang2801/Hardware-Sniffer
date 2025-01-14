@@ -111,19 +111,30 @@ class WindowsHardwareInfo:
         manufacturer = model = "Unknown"
 
         try:
-            base_board = c.Win32_BaseBoard()[0]
-            manufacturer = base_board.Manufacturer
-            model = base_board.Product
-        except: pass
+            computer_system = c.Win32_ComputerSystem()[0]
+            manufacturer = computer_system.Manufacturer.split(" ")[0]
+            model = computer_system.Model
+        except:
+            manufacturer = "Unknown"
+            model = "Unknown"
 
         try:
-            computer_system = c.Win32_ComputerSystem()[0]
-            manufacturer = computer_system.Manufacturer
-            model = computer_system.Model
-        except: pass
+            base_board = c.Win32_BaseBoard()[0]
+            base_board_manufacturer = base_board.Manufacturer.split(" ")[0]
+            base_board_model = base_board.Product
 
-        manufacturer = manufacturer.split(" ")[0]
-        system_name = (" ".join(item for item in (manufacturer, model) if not "unknown" in item.lower()) or model).upper()
+            if all(item not in manufacturer.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(manufacturer) < len(base_board_manufacturer):
+                manufacturer = base_board_manufacturer
+
+            if all(item not in model.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(model) < len(base_board_model):
+                model = base_board_model
+        except:
+            pass
+
+        if manufacturer == model and model == "Unknown":
+            system_name = "Unknown"
+        else:
+            system_name = " ".join(filter(lambda x: "unknown" not in x.lower(), [manufacturer, model])).upper()
 
         try:
             for chipset_name in chipset_data.amd_chipsets:
