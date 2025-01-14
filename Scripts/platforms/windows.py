@@ -123,10 +123,10 @@ class WindowsHardwareInfo:
             base_board_manufacturer = base_board.Manufacturer.split(" ")[0]
             base_board_model = base_board.Product
 
-            if all(item not in manufacturer.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(manufacturer) < len(base_board_manufacturer):
+            if any(item in manufacturer.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(manufacturer) < len(base_board_manufacturer):
                 manufacturer = base_board_manufacturer
 
-            if all(item not in model.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(model) < len(base_board_model):
+            if any(item in model.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(model) < len(base_board_model):
                 model = base_board_model
         except:
             pass
