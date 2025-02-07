@@ -597,6 +597,18 @@ class WindowsHardwareInfo:
                             
             device_info = self.parse_device_path(pnp_device_id)
             sd_controller_info[self.utils.get_unique_key(device_name, sd_controller_info)] = device_info
+
+        for device in self.devices_by_class.get("USB"):
+            device_name = device.Name or "Unknown"
+            pnp_device_id = device.PNPDeviceID
+            
+            if not pnp_device_id:
+                continue
+                            
+            device_info = self.parse_device_path(pnp_device_id)
+
+            if device_info.get("Device ID") in pci_data.RealtekCardReaderIDs:
+                sd_controller_info[self.utils.get_unique_key(device_name, sd_controller_info)] = device_info
         
         return sd_controller_info
         
