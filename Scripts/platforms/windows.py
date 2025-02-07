@@ -195,7 +195,7 @@ class WindowsHardwareInfo:
         cpus = c.Win32_Processor()
    
         cpu_brand = cpus[-1].Manufacturer
-        cpu_model = cpus[-1].Name.split("with")[0].split("@")[0].strip()
+        cpu_model = cpus[-1].Name.split("with")[0].split("@")[0].replace(" CPU", "").strip()
         cpu_description = cpus[-1].Description
         number_of_cores = cpus[-1].NumberOfCores or 0
 
