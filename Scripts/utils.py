@@ -125,17 +125,6 @@ class Utils:
     def contains_any(self, data, search_item, start=0, end=None):
         return next((item for item in data[start:end] if item.lower() in search_item.lower()), None)
 
-    def open_folder(self, folder_path):
-        if os.name == 'posix':
-            if 'darwin' in os.uname().sysname.lower():
-                subprocess.run(['open', folder_path])
-            else:
-                subprocess.run(['xdg-open', folder_path])
-        elif os.name == 'nt':
-            os.startfile(folder_path)
-        else:
-            raise NotImplementedError("This function is only supported on macOS, Windows, and Linux.")
-
     def request_input(self, prompt="Press Enter to continue..."):
         try:
             user_response = input(prompt)
