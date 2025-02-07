@@ -62,7 +62,7 @@ class HardwareSniffer:
         if os_name == "Windows":
             acpidump_path = self.check_acpidump()
 
-        output = os.path.join(self.result_dir, "ACPITables")
+        output = os.path.join(self.result_dir, "ACPI")
         self.u.create_folder(output, remove_content=True)
 
         self.u.head("Dumping ACPI Tables")
@@ -90,9 +90,8 @@ class HardwareSniffer:
                     print(" - {} -> {} failed: {}".format(os.path.basename(path), os.path.basename(path)[:-4] + ".aml", e))
                 
         print("")
-        print("Dump successful!")
+        print("Dumped ACPI tables to \"{}\"".format(output))
         print("")
-        self.u.request_input()
 
     def main(self):
         full_report = False
@@ -153,14 +152,14 @@ class HardwareSniffer:
             elif option.lower() == "t":
                 full_report = not full_report
             elif option.lower() == "h":
-                self.u.write_file(os.path.join(self.result_dir, "Report.json"), hardware_info.result)
+                self.u.write_file(self.report_path, hardware_info.result)
                 print("")
                 print("Report saved to \"{}\"".format(self.report_path))
                 print("")
-                self.u.open_folder(self.result_dir)
                 self.u.request_input()
             elif option.lower() == "a":
                 self.dump_acpi_tables()
+                self.u.request_input()
 
 if __name__ == '__main__':
     h = HardwareSniffer()

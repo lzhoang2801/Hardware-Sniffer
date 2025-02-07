@@ -32,7 +32,8 @@ jobs:
         pyinstaller --onefile `
         --add-data "Scripts/datasets/usb.ids:Scripts/datasets" `
         --add-data "Scripts/datasets/pci.ids:Scripts/datasets" `
-        Hardware-Sniffer.py
+        HardwareSniffer.py
+        mv dist/HardwareSniffer.exe dist/Hardware-Sniffer.exe
 
     - name: Build Executable CLI
       run: |
