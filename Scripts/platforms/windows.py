@@ -533,11 +533,18 @@ class WindowsHardwareInfo:
     def storage_controllers(self):
         storage_controller_info = {}
 
-        disk_drive_name_by_id = {}
+        disk_drive_names_by_id = {}
         for device in self.devices_by_class.get("DiskDrive"):
             device_name = device.Name or None
             parent_id = device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
-            disk_drive_name_by_id[parent_id] = device_name
+
+            if not device_name:
+                continue
+
+            if not disk_drive_names_by_id.get(parent_id):
+                disk_drive_names_by_id[parent_id] = []
+
+            disk_drive_names_by_id[parent_id].append(device_name)
 
         for device in self.devices_by_class.get("HDC") + self.devices_by_class.get("SCSIAdapter"):
             device_name = device.Name or "Unknown"
@@ -556,7 +563,9 @@ class WindowsHardwareInfo:
                 pass
             
             device_info.update(self.get_device_location_paths(device))
-            storage_controller_info[self.utils.get_unique_key(disk_drive_name_by_id.get(pnp_device_id, device_name), storage_controller_info)] = device_info
+            if pnp_device_id in disk_drive_names_by_id:
+                device_info["Disk Drives"] = disk_drive_names_by_id[pnp_device_id]
+            storage_controller_info[self.utils.get_unique_key(device_name, storage_controller_info)] = device_info
 
         return storage_controller_info
         
