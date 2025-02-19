@@ -94,8 +94,8 @@ class WindowsHardwareInfo:
         self.chipset_model = "Unknown"
 
         for device in c.Win32_PnPEntity():
-            device_name = getattr(device, "Name", "Unknown")
-            device_class = getattr(device, "PNPClass", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
+            device_class = getattr(device, "PNPClass", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID", None)
 
             if pnp_device_id:
@@ -115,13 +115,13 @@ class WindowsHardwareInfo:
 
         for computer_system in c.Win32_ComputerSystem():
             if computer_system:
-                manufacturer = getattr(computer_system, "Manufacturer", "Unknown").split(" ")[0]
-                model = getattr(computer_system, "Model", "Unknown")
+                manufacturer = (getattr(computer_system, "Manufacturer", None) or "Unknown").split(" ")[0]
+                model = getattr(computer_system, "Model", None) or "Unknown"
 
         for base_board in c.Win32_BaseBoard():
             if base_board:
-                base_board_manufacturer = getattr(base_board, "Manufacturer", "Unknown").split(" ")[0]
-                base_board_model = getattr(base_board, "Product", "Unknown")
+                base_board_manufacturer = (getattr(base_board, "Manufacturer", None) or "Unknown").split(" ")[0]
+                base_board_model = getattr(base_board, "Product", None) or "Unknown"
 
                 if any(item in manufacturer.lower() for item in ("unknown", "manufacturer", "o.e.m.", "product")) or len(manufacturer) < len(base_board_manufacturer):
                     manufacturer = base_board_manufacturer
@@ -160,7 +160,7 @@ class WindowsHardwareInfo:
         bios = c.Win32_BIOS()[0]
         for bios in c.Win32_BIOS():
             if bios:
-                bios_info["Version"] = getattr(bios, "SMBIOSBIOSVersion", "Unknown")
+                bios_info["Version"] = getattr(bios, "SMBIOSBIOSVersion", None) or "Unknown"
                 try:
                     bios_info["Release Date"] = time.strftime("%Y-%m-%d", time.strptime(bios.ReleaseDate.split('.')[0], "%Y%m%d%H%M%S"))
                 except:
@@ -168,7 +168,7 @@ class WindowsHardwareInfo:
 
         for computer_system in c.Win32_ComputerSystem():
             if computer_system:
-                bios_info["System Type"] = getattr(computer_system, "SystemType", "Unknown").split(" ")[0]
+                bios_info["System Type"] = (getattr(computer_system, "SystemType", None) or "Unknown").split(" ")[0]
 
         registry_path = r"SYSTEM\CurrentControlSet\Control"
         try:
@@ -234,9 +234,9 @@ class WindowsHardwareInfo:
 
         for cpu in cpus:
             if cpu:
-                cpu_brand = getattr(cpu, "Manufacturer", "Unknown")
-                cpu_model = getattr(cpu, "Name", "Unknown").split("with")[0].split("@")[0].replace(" CPU", "").strip()
-                cpu_description = getattr(cpu, "Description", "Unknown")
+                cpu_brand = getattr(cpu, "Manufacturer", None) or "Unknown"
+                cpu_model = (getattr(cpu, "Name", None) or "Unknown").split("with")[0].split("@")[0].replace(" CPU", "").strip()
+                cpu_description = getattr(cpu, "Description", None) or "Unknown"
                 number_of_cores = getattr(cpu, "NumberOfCores", 0)
 
         if "Intel" in cpu_brand:
@@ -297,8 +297,8 @@ class WindowsHardwareInfo:
             pass
 
         for device in self.devices_by_class.get("Display"):
-            device_name = getattr(device, "Name", "Unknown")
-            device_class = getattr(device, "PNPClass", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
+            device_class = getattr(device, "PNPClass", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id or not pnp_device_id.startswith("PCI"):
@@ -392,7 +392,7 @@ class WindowsHardwareInfo:
             connected_gpu = None
             parent_device_id = monitor_property.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data
             for device in self.devices_by_class.get("Display"):
-                device_name = getattr(device, "Name", "Unknown")
+                device_name = getattr(device, "Name", None) or "Unknown"
                 pnp_device_id = getattr(device, "PNPDeviceID")
 
                 if pnp_device_id and pnp_device_id.startswith("PCI") and pnp_device_id.upper() == parent_device_id.upper():
@@ -413,7 +413,7 @@ class WindowsHardwareInfo:
         network_info = {}
 
         for device in self.devices_by_class.get("Net"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -452,7 +452,7 @@ class WindowsHardwareInfo:
         audio_endpoints_by_parent = {}
 
         for audio_device in self.devices_by_class.get("AudioEndpoint", []):
-            audio_name = getattr(audio_device, "Name", "Unknown").split(" (")[0]
+            audio_name = (getattr(audio_device, "Name", None) or "Unknown").split(" (")[0]
             try:
                 parent_id = audio_device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
 
@@ -466,7 +466,7 @@ class WindowsHardwareInfo:
         sound_info = {}
 
         for media_device in self.devices_by_class.get("MEDIA", []):
-            media_name = getattr(media_device, "Name", "Unknown")
+            media_name = getattr(media_device, "Name", None) or "Unknown"
             pnp_device_id = getattr(media_device, "PNPDeviceID")
 
             if not pnp_device_id:
@@ -494,7 +494,7 @@ class WindowsHardwareInfo:
         usb_controller_info = {}
 
         for device in self.devices_by_class.get("USB"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -521,12 +521,12 @@ class WindowsHardwareInfo:
             "HidUsb": "USB"
         }
 
-        self.devices_by_class["HIDClass"] = sorted(self.devices_by_class.get("HIDClass"), key=lambda item:getattr(item, "PNPDeviceID", "Unknown").split("\\")[1])
+        self.devices_by_class["HIDClass"] = sorted(self.devices_by_class.get("HIDClass"), key=lambda item:(getattr(item, "PNPDeviceID", None) or "Unknown").split("\\")[1])
         acpi_device = None
         seen_ids = set()
             
         for device in self.devices_by_class.get("HIDClass") + self.devices_by_class.get("Keyboard") + self.devices_by_class.get("Mouse"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
 
             device_info = self.parse_device_path(pnp_device_id)
@@ -577,7 +577,7 @@ class WindowsHardwareInfo:
 
         disk_drive_names_by_id = {}
         for device in self.devices_by_class.get("DiskDrive"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             try:
                 parent_id = device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data.upper()
 
@@ -592,7 +592,7 @@ class WindowsHardwareInfo:
                 pass
 
         for device in self.devices_by_class.get("HDC") + self.devices_by_class.get("SCSIAdapter"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -618,7 +618,7 @@ class WindowsHardwareInfo:
         biometric_info = {}
 
         for device in self.devices_by_class.get("Biometric"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -634,7 +634,7 @@ class WindowsHardwareInfo:
         bluetooth_info = {}
         
         for device in self.devices_by_class.get("Bluetooth"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -650,7 +650,7 @@ class WindowsHardwareInfo:
         sd_controller_info = {}
 
         for device in self.devices_by_class.get("SDHost") + self.devices_by_class.get("MTD"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -660,7 +660,7 @@ class WindowsHardwareInfo:
             sd_controller_info[self.utils.get_unique_key(device_name, sd_controller_info)] = device_info
 
         for device in self.devices_by_class.get("USB"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
@@ -677,7 +677,7 @@ class WindowsHardwareInfo:
         system_device_info = {}
 
         for device in self.devices_by_class.get("System"):
-            device_name = getattr(device, "Name", "Unknown")
+            device_name = getattr(device, "Name", None) or "Unknown"
             pnp_device_id = getattr(device, "PNPDeviceID")
             
             if not pnp_device_id:
