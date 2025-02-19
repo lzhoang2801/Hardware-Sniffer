@@ -4,7 +4,9 @@ class GPUIdentifier:
         device_id = hardware_id[5:]
         device_type = "Integrated GPU"
 
-        if device_id.startswith("01"):
+        if device_id.startswith(("0042", "0046")):
+            gpu_codename = "Iron Lake"
+        elif device_id.startswith("01"):
             if device_id[-2] in ("5", "6"):
                 gpu_codename = "Ivy Bridge"
             else:
