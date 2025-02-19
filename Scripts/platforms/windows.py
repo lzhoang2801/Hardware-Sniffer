@@ -9,6 +9,7 @@ import time
 import re
 import wmi
 import winreg
+import subprocess
 
 c = wmi.WMI()
 
@@ -152,6 +153,51 @@ class WindowsHardwareInfo:
             "Chipset": self.chipset_model,
             "Platform": system_platform
         }
+
+    def bios(self):
+        bios_info = {}
+
+        bios = c.Win32_BIOS()[0]
+        for bios in c.Win32_BIOS():
+            if bios:
+                bios_info["Version"] = getattr(bios, "SMBIOSBIOSVersion", "Unknown")
+                try:
+                    bios_info["Release Date"] = time.strftime("%Y-%m-%d", time.strptime(bios.ReleaseDate.split('.')[0], "%Y%m%d%H%M%S"))
+                except:
+                    bios_info["Release Date"] = "Unknown"
+
+        for computer_system in c.Win32_ComputerSystem():
+            if computer_system:
+                bios_info["System Type"] = getattr(computer_system, "SystemType", "Unknown").split(" ")[0]
+
+        registry_path = r"SYSTEM\CurrentControlSet\Control"
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, registry_path) as base_key:
+                firmware_type = winreg.QueryValueEx(base_key, "PEFirmwareType")[0]
+                bios_info["Firmware Type"] = "UEFI" if firmware_type == 2 else "BIOS"
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            pass
+
+        if not bios_info.get("Firmware Type"):
+            try:
+                result = subprocess.run(["powershell", "-Command", "$env:firmware_type"], capture_output=True, text=True)
+                bios_info["Firmware Type"] = result.stdout.strip() if result.returncode == 0 else bios_info["Firmware Type"]
+            except Exception as e:
+                pass
+
+        registry_path = r"SYSTEM\CurrentControlSet\Control\SecureBoot\State"
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, registry_path) as base_key:
+                secure_boot_state = winreg.QueryValueEx(base_key, "UEFISecureBootEnabled")[0]
+                bios_info["Secure Boot"] = "Enabled" if secure_boot_state else "Disabled"
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            pass
+
+        return bios_info
 
     def is_set(self, cpu, leaf, subleaf, reg_idx, bit):
         regs = cpu(leaf, subleaf)
@@ -653,6 +699,7 @@ class WindowsHardwareInfo:
         steps = [
             ('Gathering PnP devices', self.pnp_devices, None),
             ('Gathering motherboard information', self.motherboard, "Motherboard"),
+            ('Gathering BIOS information', self.bios, "BIOS"),
             ('Gathering CPU information', self.cpu, "CPU"),
             ('Gathering GPU information', self.gpu, "GPU"),
             ('Gathering monitor information', self.monitor, "Monitor"),
