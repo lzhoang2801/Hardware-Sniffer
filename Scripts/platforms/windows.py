@@ -66,7 +66,7 @@ class WindowsHardwareInfo:
             return "Net"
         elif device_id in pci_data.RealtekCardReaderIDs:
             return "SDHost"
-        elif self.utils.contains_any(("Video Controller", "Video Adapter", "Graphics Controller"), device_name) and self.classify_gpu(device_id).get("Codename") != "Unknown":
+        elif self.utils.contains_any(("Video Controller", "VGA Compatible", "Video Adapter", "Graphics Controller"), device_name):
             return "Display"
         
         return "Unknown"
