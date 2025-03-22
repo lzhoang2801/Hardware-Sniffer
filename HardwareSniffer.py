@@ -40,14 +40,16 @@ class HardwareSniffer:
         self.u.head("Gathering Files")
         print("")
         print("Please wait for download acpidump...")
-        print("")
         
         acpidump_download_link = self.get_latest_acpidump()
         if not acpidump_download_link: 
-            raise Exception("Could not get latest acpidump")
+            raise Exception("Could not find download URL for acpidump.exe.")
         
         try:
             self.fetcher.download_and_save_file(acpidump_download_link, acpidump_path)
+
+            if not os.path.exists(acpidump_path):
+                raise Exception("Failed to download acpidump.exe.")
         except:
             raise Exception("Could not locate or download acpidump.exe!\n\nPlease manually download acpidump.exe from:\n - {}\n\nAnd place in:\n - {}\n".format(
                 "https://github.com/acpica/acpica/releases",
