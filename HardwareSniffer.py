@@ -23,6 +23,8 @@ class HardwareSniffer:
         self.report_path = os.path.join(self.result_dir, "Report.json")
 
     def get_latest_acpidump(self):
+        return "https://github.com/acpica/acpica/releases/download/R2024_12_12/acpidump.exe"
+
         latest_release = self.github.get_latest_release("acpica", "acpica") or {}
         
         for asset in latest_release.get("assets"):
