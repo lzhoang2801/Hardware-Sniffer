@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     h.result_dir = args.output_dir
 
-    if os_name != "Windows":
+    if os_name not in ("Windows", "Linux"):
         raise NotImplementedError(f"Unsupported operating system: {os_name}")
 
     if not args.export:
