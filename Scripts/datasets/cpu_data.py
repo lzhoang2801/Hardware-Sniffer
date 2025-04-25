@@ -1,5 +1,8 @@
 identifier = [
     ("Arrow Lake-S", "Family 6 Model 198 Stepping 2"),
+    ("Arrow Lake-H", "Family 6 Model 197 Stepping 2"),
+    ("Arrow Lake-HX", "Family 6 Model 198 Stepping 2", "HX"),
+    ("Arrow Lake-U", "Family 6 Model 181 Stepping 0"),
     ("Lunar Lake", "Family 6 Model 189 Stepping 1"),
     ("Meteor Lake-H", "Family 6 Model 170 Stepping 4", "H"),
     ("Meteor Lake-U", "Family 6 Model 170 Stepping 4", "U"),
