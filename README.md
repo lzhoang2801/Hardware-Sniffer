@@ -16,6 +16,9 @@
   </p>
 </div>
 
+> [!NOTE]
+> This project is signed to ensure security and trustworthiness.
+
 <details>
   <summary>Table of Contents</summary>
   <ol>
