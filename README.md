@@ -46,7 +46,7 @@
 
 - **Support for macOS and Linux?**
   - **macOS**: ❌ No. Due to potential inaccuracies caused by Hackintosh modifications, we cannot guarantee accurate information.
-  - **Linux**: 🤔 Currently not supported, but this could change with future updates.
+  - **Linux**: 🔄 Work in progress in branch [add-linux-support](https://github.com/lzhoang2801/Hardware-Sniffer/tree/add-linux-support)
 
 ## 🚀 **How To Use**
 
