@@ -73,12 +73,13 @@ class LinuxDeviceLocator:
     def get_device_location_paths(self, device_dir):
         device_location_paths = {}
 
-        uevent = self.utils.read_file(os.path.join(device_dir, "uevent")) or "\n"
+        uevent_bytes = self.utils.read_file(os.path.join(device_dir, "uevent")) or b""
+        uevent = uevent_bytes.decode('utf-8', errors='ignore')
+        
         device_slot_name = None
 
         for line in uevent.split("\n"):
             lower_line = line.lower()
-
             if "pci_slot_name" in lower_line:
                 device_slot_name = line.split("=")[1]
                 break
@@ -89,7 +90,8 @@ class LinuxDeviceLocator:
             device_path = os.path.join("/sys/bus/pci/devices", device_slot_name)
 
             if os.path.exists(device_path):
-                pci_root = "PciRoot({})".format(hex(int(device_slot_name.split(":")[0], 16)))
+                pci_root_parts = device_slot_name.split(":")[0]
+                pci_root = f"PciRoot(0x{pci_root_parts})"
 
                 pci_components = []
 
@@ -97,8 +99,18 @@ class LinuxDeviceLocator:
                 for child, _ in children:
                     if child.startswith("0000:") and child != device_slot_name:
                         bus_device_func = child.split(":")[-1]
-                        bus, device_func = bus_device_func.split(".")
-                        pci_components.append("Pci(0x{},0x{})".format(bus, device_func))
+
+                        parts = bus_device_func.split('.')
+                        if len(parts) >= 2:
+                            bus = parts[0]
+                            device_func = parts[1]
+                        elif len(parts) == 1:
+                            bus = parts[0]
+                            device_func = "0"
+                        else:
+                            continue
+
+                        pci_components.append(f"Pci(0x{bus},0x{device_func})")
 
                 if pci_components:
                     pci_components.sort(reverse=True)
@@ -107,8 +119,10 @@ class LinuxDeviceLocator:
         if pci_path:
             device_location_paths["PCI Path"] = pci_path
 
-        acpi_path = self.utils.read_file(os.path.join(device_dir, "firmware_node", "path"))
-        if acpi_path:
-            device_location_paths["ACPI Path"] = acpi_path.strip()
+        acpi_path_file = os.path.join(device_dir, "firmware_node", "path")
+        if os.path.exists(acpi_path_file):
+            acpi_path_bytes = self.utils.read_file(acpi_path_file)
+            if acpi_path_bytes:
+                device_location_paths["ACPI Path"] = acpi_path_bytes.decode('utf-8', errors='ignore').strip()
 
         return device_location_paths

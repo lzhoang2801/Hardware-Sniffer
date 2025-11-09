@@ -16,16 +16,20 @@ if __name__ == '__main__':
 
     h.result_dir = args.output_dir
 
-    if os_name not in ("Windows", "Linux"):
+    if os_name == "Windows":
+        from Scripts.platforms.windows import WindowsHardwareInfo
+        hardware_info = WindowsHardwareInfo()
+        hardware_info.hardware_collector()
+    elif os_name == "Linux":
+        from Scripts.platforms.linux import LinuxHardwareInfo
+        hardware_info = LinuxHardwareInfo()
+        hardware_info.hardware_collector()
+    else:
         raise NotImplementedError(f"Unsupported operating system: {os_name}")
 
     if not args.export:
         parser.print_help()
         sys.exit(1)
-
-    from Scripts.platforms.windows import WindowsHardwareInfo
-    hardware_info = WindowsHardwareInfo()
-    hardware_info.hardware_collector()
 
     h.u.create_folder(h.result_dir)
 
