@@ -6,6 +6,7 @@ identifier = [
     ("Lunar Lake", "Family 6 Model 189 Stepping 1"),
     ("Meteor Lake-H", "Family 6 Model 170 Stepping 4", "H"),
     ("Meteor Lake-U", "Family 6 Model 170 Stepping 4", "U"),
+    ("Raptor Lake-S", "Family 6 Model 183 Stepping 0"),
     ("Raptor Lake-S", "Family 6 Model 183 Stepping 1"),
     ("Raptor Lake-S", "Family 6 Model 191 Stepping 2"),
     ("Raptor Lake-S", "Family 6 Model 191 Stepping 5"),
