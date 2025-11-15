@@ -6,7 +6,8 @@ import shutil
 import zipfile
 
 class Utils:
-    def __init__(self, script_name = "Hardware Sniffer"):
+    def __init__(self, script_name = "Hardware Sniffer", rich_format=True):
+        self.rich_format = rich_format
         self.script_name = script_name
     
     def get_full_path(self, *path):
@@ -140,30 +141,35 @@ class Utils:
         print("")
         if done:
             for step in steps:
-                print("  [\033[92m✓\033[0m] {}".format(step))
+                print("  [{}] {}".format("\033[92m✓\033[0m" if self.rich_format else "*", step))
         else:
             for i, step in enumerate(steps):
                 if i < current_step_index:
-                    print("  [\033[92m✓\033[0m] {}".format(step))
+                    print("  [{}] {}".format("\033[92m✓\033[0m" if self.rich_format else "*", step))
                 elif i == current_step_index:
-                    print("  [\033[1;93m>\033[0m] {}...".format(step))
+                    print("  [{}] {}".format("\033[1;93m>\033[0m" if self.rich_format else ">", step))
                 else:
                     print("  [ ] {}".format(step))
         print("")
 
     def head(self, text = None, width = 68, resize=True):
-        if resize:
-            self.adjust_window_size()
-        os.system('cls' if os.name=='nt' else 'clear')
         if text == None:
             text = self.script_name
-        separator = "═" * (width - 2)
-        title = " {} ".format(text)
-        if len(title) > width - 2:
-            title = title[:width-4] + "..."
-        title = title.center(width - 2)
         
-        print("╔{}╗\n║{}║\n╚{}╝".format(separator, title, separator))
+        os.system('cls' if os.name=='nt' else 'clear')
+
+        if self.rich_format:
+            if resize:
+                self.adjust_window_size()
+
+            separator = "═" * (width - 2)
+            title = " {} ".format(text)
+            if len(title) > width - 2:
+                title = title[:width-4] + "..."
+            title = title.center(width - 2)
+            print("╔{}╗\n║{}║\n╚{}╝".format(separator, title, separator))
+        else:
+            print(text)
     
     def adjust_window_size(self, content=""):
         lines = content.splitlines()

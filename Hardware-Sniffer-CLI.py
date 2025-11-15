@@ -28,18 +28,16 @@ def main():
         return EXIT_UNSUPPORTED_OS
 
     try:
-        h = HardwareSniffer.HardwareSniffer(args.output_dir)
+        h = HardwareSniffer.HardwareSniffer(args.output_dir, rich_format=False)
 
-        from Scripts.platforms.windows import WindowsHardwareInfo
-        hardware_info = WindowsHardwareInfo()
-        hardware_info.hardware_collector()
+        h.hardware_info.hardware_collector()
     except Exception as e:
         print(f"Error during hardware collection: {e}", file=sys.stderr)
         traceback.print_exc()
         return EXIT_HARDWARE_COLLECTION_ERROR
 
     try:
-        h.export_hardware_report(hardware_info.result)
+        h.export_hardware_report()
     except Exception as e:
         print(f"Error saving report: {e}", file=sys.stderr)
         traceback.print_exc()

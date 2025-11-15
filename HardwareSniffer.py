@@ -14,15 +14,22 @@ import sys
 os_name = platform.system()
 
 class HardwareSniffer:
-    def __init__(self, result_dir="SysReport"):
+    def __init__(self, result_dir="SysReport", rich_format=True):
         self.github = github.Github()
         self.fetcher = resource_fetcher.ResourceFetcher()
         self.run = run.Run().run
-        self.u = utils.Utils()
+        self.u = utils.Utils(rich_format=rich_format)
         self.temporary_dir = tempfile.mkdtemp()
         self.result_dir = result_dir
 
-    def generate_summary_view(self, data):
+        if os_name == "Windows":
+            from Scripts.platforms.windows import WindowsHardwareInfo
+            self.hardware_info = WindowsHardwareInfo(rich_format=rich_format)
+        else:
+            raise NotImplementedError(f"Unsupported operating system: {os_name}")
+
+    def generate_summary_view(self):
+        data = self.hardware_info.result.copy()
         summary = [""]
         
         if "Motherboard" in data and data["Motherboard"]:
@@ -121,7 +128,7 @@ class HardwareSniffer:
 
         return "\n".join(summary)
 
-    def export_hardware_report(self, hardware_info):
+    def export_hardware_report(self):
         self.u.head("Exporting Hardware Report")
         print("")
 
@@ -130,7 +137,7 @@ class HardwareSniffer:
             
             self.report_path = os.path.join(self.result_dir, "Report.json")
 
-            self.u.write_file(self.report_path, hardware_info)
+            self.u.write_file(self.report_path, self.hardware_info.result)
             print("Report saved to `{}`".format(self.report_path))
         except Exception as e:
             print(f"Error exporting report: {e}", file=sys.stderr)
@@ -150,7 +157,7 @@ class HardwareSniffer:
         return None
 
     def check_acpidump(self):
-        acpidump_path = "acpidump.exe"
+        acpidump_path = os.path.join(os.getcwd(), "acpidump.exe")
 
         if os.path.exists(acpidump_path):
             return acpidump_path
@@ -214,22 +221,13 @@ class HardwareSniffer:
         print("")
 
     def main(self):
-        full_report = False
-
-        if os_name == "Windows":
-            from Scripts.platforms.windows import WindowsHardwareInfo
-            hardware_info = WindowsHardwareInfo()
-            hardware_info.hardware_collector()
-        else:
-            raise NotImplementedError(f"Unsupported operating system: {os_name}")
-        
-        self.u.create_folder(self.result_dir)
+        self.hardware_info.hardware_collector()
 
         while True:
             contents = []
             contents.append("")
             contents.append("Your hardware details:")
-            contents.append(self.generate_summary_view(hardware_info.result.copy()))
+            contents.append(self.generate_summary_view())
             contents.append("")
             contents.append("H. Export hardware report")
             contents.append("A. Dump ACPI Tables")
@@ -245,7 +243,7 @@ class HardwareSniffer:
             if option.lower() == "q":
                 self.u.exit_program()
             elif option.lower() == "h":
-                self.export_hardware_report(hardware_info.result)
+                self.export_hardware_report()
                 self.u.request_input()
             elif option.lower() == "a":
                 self.dump_acpi_tables()

@@ -14,11 +14,11 @@ import subprocess
 c = wmi.WMI()
 
 class WindowsHardwareInfo:
-    def __init__(self):
+    def __init__(self, rich_format=True):
         self.lookup_codename = cpu_identifier.CPUIdentifier().lookup_codename
         self.classify_gpu = gpu_identifier.GPUIdentifier().classify_gpu
         self.get_device_location_paths = device_locator.WindowsDeviceLocator().get_device_location_paths
-        self.utils = utils.Utils()
+        self.utils = utils.Utils(rich_format=rich_format)
         self.usb_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "usb.ids"))
         self.pci_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "pci.ids"))
 
