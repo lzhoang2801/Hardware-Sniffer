@@ -690,10 +690,6 @@ class WindowsHardwareInfo:
         return system_device_info
 
     def hardware_collector(self):
-        self.utils.head("Hardware Information Collection")
-        print("")
-        print("Please wait while we gather your hardware details")
-        print("")
         self.result = {}
 
         steps = [
@@ -714,9 +710,11 @@ class WindowsHardwareInfo:
             ('Gathering system devices', self.system_devices, "System Devices")
         ]
 
-        total_steps = len(steps)
-        for index, (message, function, attribute) in enumerate(steps, start=1):
-            print(f"[{index}/{total_steps}] {message}...")
+        title = "Collecting hardware information"
+        step_names = [message for message, function, attribute in steps]
+
+        for index, (message, function, attribute) in enumerate(steps):
+            self.utils.progress_bar(title, step_names, index)
             value = function()
             if not attribute:
                 continue
@@ -725,6 +723,7 @@ class WindowsHardwareInfo:
             else:
                 print("    - No {} found.".format(attribute.lower()))
 
-        print("")
-        print("Hardware information collection complete.")
+        self.utils.progress_bar(title, step_names, len(steps), done=True)
+
+        print("Hardware information collection complete!")
         time.sleep(1)

@@ -2,40 +2,60 @@ import argparse
 import HardwareSniffer
 import platform
 import sys
-import os
+import traceback
 
-os_name = platform.system()
+EXIT_SUCCESS = 0
+EXIT_INVALID_ARGS = 1
+EXIT_UNSUPPORTED_OS = 2
+EXIT_HARDWARE_COLLECTION_ERROR = 3
+EXIT_REPORT_GENERATION_ERROR = 4
+EXIT_ACPI_DUMP_ERROR = 5
 
-if __name__ == '__main__':
+def main():
+    os_name = platform.system()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--export", action="store_true", help="export system report")
     parser.add_argument("-o", "--output-dir", default="SysReport", help="custom output directory to save system report, default to SysReport")
     args = parser.parse_args()
 
-    h = HardwareSniffer.HardwareSniffer()
-
-    h.result_dir = args.output_dir
-
-    if os_name != "Windows":
-        raise NotImplementedError(f"Unsupported operating system: {os_name}")
-
     if not args.export:
         parser.print_help()
-        sys.exit(1)
+        return EXIT_INVALID_ARGS
 
-    from Scripts.platforms.windows import WindowsHardwareInfo
-    hardware_info = WindowsHardwareInfo()
-    hardware_info.hardware_collector()
+    if os_name != "Windows":
+        print(f"Unsupported operating system: {os_name}", file=sys.stderr)
+        return EXIT_UNSUPPORTED_OS
 
-    h.u.create_folder(h.result_dir)
+    try:
+        h = HardwareSniffer.HardwareSniffer(args.output_dir)
 
-    h.u.write_file(os.path.join(h.result_dir, "Report.json"), hardware_info.result)
+        from Scripts.platforms.windows import WindowsHardwareInfo
+        hardware_info = WindowsHardwareInfo()
+        hardware_info.hardware_collector()
+    except Exception as e:
+        print(f"Error during hardware collection: {e}", file=sys.stderr)
+        traceback.print_exc()
+        return EXIT_HARDWARE_COLLECTION_ERROR
+
+    try:
+        h.export_hardware_report(hardware_info.result)
+    except Exception as e:
+        print(f"Error saving report: {e}", file=sys.stderr)
+        traceback.print_exc()
+        return EXIT_REPORT_GENERATION_ERROR
+
+    try:
+        h.dump_acpi_tables()
+    except Exception as e:
+        print(f"Error dumping ACPI tables: {e}", file=sys.stderr)
+        traceback.print_exc()
+        return EXIT_ACPI_DUMP_ERROR
+
+    h.u.head("Hardware Sniffer")
     print("")
-    print("Report saved to \"{}\"".format(h.report_path))
-    print("")
+    print("Done! Please check the report in `{}`".format(h.result_dir))
+    return EXIT_SUCCESS
 
-    h.dump_acpi_tables()
-
-    print("Done.")
-
-    sys.exit(0)
+if __name__ == '__main__':
+    sys.exit(main())
