@@ -36,6 +36,10 @@
 
 ## ✨ **Features**
 
+- **Vulnerability fixes**:
+This project has successfully mitigated these vulnerabilities:
+- Outdated UA string - it was using an outdated Chrome 131 UA which exposed users to unpatched Google Chrome flaws that Google has already patched - or even worse - redirect to less secure servers. This is mitigated by using the latest UA for Safari - 26.1. 
+
 - **Comprehensive Hardware Collection**: 
   - Extracts information about your motherboard, CPU, GPU, monitor, network adapters, audio devices, USB controllers, input devices, storage controllers, biometric sensors, Bluetooth, SD controllers, and system devices using the WMI command-line (WMIC) utility.
   
