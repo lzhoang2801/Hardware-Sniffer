@@ -62,6 +62,12 @@ class Utils:
                             data[current_vendor]["devices"][device_id.upper()] = device_name
             else:
                 data = file_handle.read()
+
+                if isinstance(data, bytes) and sys.platform.startswith("linux") and file_path.startswith(("/sys/", "/proc/")) and "edid" not in os.path.basename(file_path).lower():
+                    try:
+                        data = data.decode("utf-8")
+                    except:
+                        pass
         return data
 
     def find_matching_paths(self, root_path, extension_filter=None, name_filter=None, type_filter=None):

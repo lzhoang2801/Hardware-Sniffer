@@ -2,6 +2,7 @@ import argparse
 import HardwareSniffer
 import platform
 import sys
+import os
 import traceback
 
 EXIT_SUCCESS = 0
@@ -23,7 +24,7 @@ def main():
         parser.print_help()
         return EXIT_INVALID_ARGS
 
-    if os_name != "Windows":
+    if os_name not in ("Windows", "Linux"):
         print(f"Unsupported operating system: {os_name}", file=sys.stderr)
         return EXIT_UNSUPPORTED_OS
 

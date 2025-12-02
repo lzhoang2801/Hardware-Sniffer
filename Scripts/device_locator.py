@@ -1,3 +1,5 @@
+from Scripts import utils
+import os
 import re
 
 class WindowsDeviceLocator:
@@ -69,3 +71,48 @@ class WindowsDeviceLocator:
                 "PCI Path": pci_path,
                 "ACPI Path": acpi_path
             }
+        
+class LinuxDeviceLocator:
+    def __init__(self):
+        self.utils = utils.Utils()
+
+    def get_device_location_paths(self, device_dir):
+        device_location_paths = {}
+
+        uevent = self.utils.read_file(os.path.join(device_dir, "uevent")) or "\n"
+        device_slot_name = None
+
+        for line in uevent.split("\n"):
+            lower_line = line.lower()
+
+            if "pci_slot_name" in lower_line:
+                device_slot_name = line.split("=")[1]
+                break
+
+        pci_path = None
+
+        if device_slot_name:
+            device_path = os.path.join("/sys/bus/pci/devices", device_slot_name)
+
+            if os.path.exists(device_path):
+                parts = device_slot_name.replace(":", ".").split(".")
+                if len(parts) >= 4:
+                    domain = int(parts[0], 16)
+                    bus = int(parts[1], 16)
+                    device = int(parts[2], 16)
+                    function = int(parts[3], 16)
+                    
+                    pci_root = "PciRoot(0x{:x})".format(domain)
+                    pci_path = "{}/Pci(0x{:x},0x{:x})".format(pci_root, device, function)
+
+        if pci_path:
+            device_location_paths["PCI Path"] = pci_path
+
+        acpi_path = self.utils.read_file(os.path.join(device_dir, "firmware_node", "path"))
+        if acpi_path:
+            acpi_path = acpi_path.strip()
+            if acpi_path.startswith("\\_SB_."):
+                acpi_path = "\\_SB." + acpi_path[6:]
+            device_location_paths["ACPI Path"] = acpi_path
+
+        return device_location_paths

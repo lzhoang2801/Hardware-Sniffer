@@ -10,6 +10,7 @@ import tempfile
 import shutil
 import traceback
 import sys
+import getpass
 
 os_name = platform.system()
 
@@ -20,11 +21,14 @@ class HardwareSniffer:
         self.run = run.Run().run
         self.u = utils.Utils(rich_format=rich_format)
         self.temporary_dir = tempfile.mkdtemp()
-        self.result_dir = result_dir
+        self.result_dir = os.path.join(os.getcwd(), result_dir)
 
         if os_name == "Windows":
             from Scripts.platforms.windows import WindowsHardwareInfo
             self.hardware_info = WindowsHardwareInfo(rich_format=rich_format)
+        elif os_name == "Linux":
+            from Scripts.platforms.linux import LinuxHardwareInfo
+            self.hardware_info = LinuxHardwareInfo(rich_format=rich_format)
         else:
             raise NotImplementedError(f"Unsupported operating system: {os_name}")
 
@@ -194,10 +198,9 @@ class HardwareSniffer:
 
         self.u.head("Dumping ACPI Tables")
         print("")
+        print("Dumping tables to {}...".format(acpi_dir))
         
         if os_name == "Windows":
-            print("Dumping tables to {}...".format(acpi_dir))
-
             cwd = os.getcwd()
             os.chdir(acpi_dir)
             out = self.run({
@@ -215,6 +218,34 @@ class HardwareSniffer:
                     os.rename(os.path.join(acpi_dir, path), os.path.join(acpi_dir, path[:-4] + ".aml"))
                 except Exception as e:
                     print(" - {} -> {} failed: {}".format(os.path.basename(path), os.path.basename(path)[:-4] + ".aml", e))
+        elif os_name == "Linux":
+            table_dir = "/sys/firmware/acpi/tables"
+            if not os.path.isdir(table_dir):
+                print("Could not locate {}!".format(table_dir))
+                return
+            
+            tables = self.u.find_matching_paths(table_dir, type_filter="file")
+            if not tables:
+                print(" - No tables found!")
+                print("")
+                return
+            
+            for table_path, type in tables:
+                destination_path = os.path.join(acpi_dir, table_path.upper() + ".aml")
+
+                out = self.run({
+                    "args": ["sudo", "cp", os.path.join(table_dir, table_path), destination_path]
+                })
+                if out[2] != 0:
+                    print(" - {}".format(out[1]))
+                    return
+                
+                out = self.run({
+                    "args": ["sudo", "chown", getpass.getuser(), destination_path]
+                })
+                if out[2] != 0:
+                    print(" - {}".format(out[1]))
+                    return
 
         print("")
         print("ACPI tables dumped successfully.")
