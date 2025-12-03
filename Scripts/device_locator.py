@@ -95,15 +95,24 @@ class LinuxDeviceLocator:
             device_path = os.path.join("/sys/bus/pci/devices", device_slot_name)
 
             if os.path.exists(device_path):
-                parts = device_slot_name.replace(":", ".").split(".")
-                if len(parts) >= 4:
-                    domain = int(parts[0], 16)
-                    bus = int(parts[1], 16)
-                    device = int(parts[2], 16)
-                    function = int(parts[3], 16)
-                    
-                    pci_root = "PciRoot(0x{:x})".format(domain)
-                    pci_path = "{}/Pci(0x{:x},0x{:x})".format(pci_root, device, function)
+                real_path = os.path.realpath(device_path)
+                
+                pci_segments = []
+                path_parts = real_path.split("/")
+                
+                domain = None
+                for part in path_parts:
+                    if part.startswith("pci") and ":" in part:
+                        domain = int(part[3:].split(":")[0], 16)
+                    elif ":" in part and "." in part:
+                        segments = part.replace(":", ".").split(".")
+                        if len(segments) >= 4:
+                            device = int(segments[2], 16)
+                            function = int(segments[3], 16)
+                            pci_segments.append("Pci(0x{:x},0x{:x})".format(device, function))
+                
+                if domain is not None and pci_segments:
+                    pci_path = "PciRoot(0x{:x})/{}".format(domain, "/".join(pci_segments))
 
         if pci_path:
             device_location_paths["PCI Path"] = pci_path
