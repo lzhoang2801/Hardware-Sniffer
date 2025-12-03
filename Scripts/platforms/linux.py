@@ -17,6 +17,7 @@ class LinuxHardwareInfo:
         self.get_device_location_paths = device_locator.LinuxDeviceLocator().get_device_location_paths
         self.run = run.Run().run
         self.utils = utils.Utils(rich_format=rich_format)
+        self.usb_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "usb.ids"))
 
     def format_value(self, value, type="string"):
         if not value:
@@ -686,6 +687,100 @@ class LinuxHardwareInfo:
             usb_controller_info[self.utils.get_unique_key(device_name, usb_controller_info)] = controller_info
 
         return usb_controller_info
+
+    def parse_input_device_path(self, device_dir):
+        """Parse input device information from sysfs to extract vendor/device IDs and bus type."""
+        device_info = {}
+        
+        bustype_path = os.path.join(device_dir, "id", "bustype")
+        vendor_path = os.path.join(device_dir, "id", "vendor")
+        product_path = os.path.join(device_dir, "id", "product")
+        
+        if not os.path.exists(bustype_path):
+            return device_info
+            
+        try:
+            bustype_val = int(self.utils.read_file(bustype_path).strip(), 16)
+        except:
+            return device_info
+        
+        if bustype_val == 0x03:
+            device_info["Bus Type"] = "USB"
+        elif bustype_val == 0x01:
+            device_info["Bus Type"] = "PCI"
+        elif bustype_val == 0x05:
+            device_info["Bus Type"] = "USB"
+        elif bustype_val in (0x11, 0x18, 0x19):
+            device_info["Bus Type"] = "ACPI"
+        elif bustype_val == 0x06:
+            device_info["Bus Type"] = "ROOT"
+        else:
+            device_info["Bus Type"] = "HID"
+        
+        try:
+            vendor_id = self.utils.read_file(vendor_path).strip().zfill(4).upper()
+            product_id = self.utils.read_file(product_path).strip().zfill(4).upper()
+            
+            if vendor_id != "0000" and product_id != "0000":
+                device_info["Device ID"] = "{}-{}".format(vendor_id, product_id)
+            else:
+                name_path = os.path.join(device_dir, "name")
+                device_name = (self.utils.read_file(name_path) or "").strip()
+                if device_name:
+                    device_info["Device"] = device_name.replace(" ", "").upper()[:8]
+        except:
+            pass
+        
+        return device_info
+
+    def get_input_device_type(self, device_dir, device_name):
+        """Determine the device type (Keyboard/Mouse/PS2) from device capabilities."""
+        capabilities_path = os.path.join(device_dir, "capabilities")
+        
+        if not os.path.exists(capabilities_path):
+            return None
+        
+        key_caps_path = os.path.join(capabilities_path, "key")
+        rel_caps_path = os.path.join(capabilities_path, "rel")
+        abs_caps_path = os.path.join(capabilities_path, "abs")
+        
+        has_keys = False
+        has_relative = False
+        has_absolute = False
+        
+        try:
+            key_caps = self.utils.read_file(key_caps_path)
+            if key_caps and key_caps.strip() != "0":
+                has_keys = True
+        except:
+            pass
+        
+        try:
+            rel_caps = self.utils.read_file(rel_caps_path)
+            if rel_caps and rel_caps.strip() != "0":
+                has_relative = True
+        except:
+            pass
+        
+        try:
+            abs_caps = self.utils.read_file(abs_caps_path)
+            if abs_caps and abs_caps.strip() != "0":
+                has_absolute = True
+        except:
+            pass
+        
+        lower_name = device_name.lower()
+        
+        if "keyboard" in lower_name or (has_keys and not has_relative and not has_absolute):
+            return "Keyboard"
+        elif "mouse" in lower_name or has_relative:
+            return "Mouse"
+        elif "touchpad" in lower_name or "trackpad" in lower_name:
+            return "Touchpad"
+        elif has_absolute:
+            return "Touchscreen"
+        
+        return None
                 
     def input(self):
         input_info = {}
@@ -695,6 +790,11 @@ class LinuxHardwareInfo:
         if not os.path.exists(INPUT_DEVICE_PATH):
             return input_info
         
+        filter_words = ("wireless radio controls", "vendor-defined device", "consumer control device", "system controller", "pc speaker", "power button", "sleep button", "lid switch")
+        
+        seen_ids = set()
+        
+        input_devices = []
         for device in os.listdir(INPUT_DEVICE_PATH):
             device_dir = os.path.join(INPUT_DEVICE_PATH, device)
 
@@ -703,38 +803,47 @@ class LinuxHardwareInfo:
 
             if "input" not in device:
                 continue
-
-            bustype_path = os.path.join(device_dir, "id", "bustype")
+            
+            input_devices.append((device, device_dir))
+        
+        input_devices = sorted(input_devices, key=lambda item: item[0])
+            
+        for device, device_dir in input_devices:
             name_path = os.path.join(device_dir, "name")
-            
-            if not os.path.exists(bustype_path):
-                continue
-                
-            try:
-                bustype_val = int(self.utils.read_file(bustype_path).strip(), 16)
-            except:
-                continue
-            
-            # Map Linux input bus types to OpCore-Simplify expected types (PCI|USB|ACPI|ROOT)
-            # 0x01: PCI, 0x03: USB, 0x05: Bluetooth, 0x11: I8042 (PS/2), 0x18: I2C, 0x19: SMBus
-            if bustype_val == 0x03:
-                bus_type = "USB"
-            elif bustype_val == 0x01:
-                bus_type = "PCI"
-            elif bustype_val in (0x11, 0x18, 0x19): # PS/2, I2C, SMBus -> ACPI
-                bus_type = "ACPI"
-            else:
-                bus_type = "ROOT"
-
             device_name = (self.utils.read_file(name_path) or device).strip()
             
-            device_info = {
-                "Bus Type": bus_type,
-                "Device": device_name,
-                "Device Type": "Unknown"
-            }
+            device_info = self.parse_input_device_path(device_dir)
+            
+            if not device_info:
+                continue
+            
+            device_id = (device_info.get("Device") or device_info.get("Device ID") or "").replace("-", "")
+            if self.utils.contains_any(filter_words, device_name) or not device_id:
+                continue
+            
+            device_type = self.get_input_device_type(device_dir, device_name)
+            
+            if device_id in seen_ids or device_info.get("Bus Type") not in ("ACPI", "USB", "HID") or not device_type:
+                continue
+            
+            seen_ids.add(device_id)
+            
+            device_info["Device Type"] = device_type
+            
+            if device_info.get("Bus Type") in ("USB", "HID"):
+                if device_info.get("Device ID") and self.usb_ids:
+                    try:
+                        vendor_id = device_info.get("Device ID")[:4]
+                        product_id = device_info.get("Device ID")[5:]
+                        usb_device_name = self.usb_ids.get(vendor_id, {}).get("devices", {}).get(product_id)
+                        if usb_device_name:
+                            device_name = usb_device_name
+                    except:
+                        pass
+                device_info["Bus Type"] = "USB"
+                del device_info["Device Type"]
 
-            input_info[self.utils.get_unique_key(device, input_info)] = device_info
+            input_info[self.utils.get_unique_key(device_name, input_info)] = device_info
 
         return input_info
     
@@ -778,7 +887,82 @@ class LinuxHardwareInfo:
     def biometric(self):
         biometric_info = {}
 
-        ###
+        if os.path.exists(USB_DEVICES_PATH):
+            for device in os.listdir(USB_DEVICES_PATH):
+                device_dir = os.path.join(USB_DEVICES_PATH, device)
+
+                if not os.path.isdir(device_dir):
+                    continue
+
+                vendor_path = os.path.join(device_dir, "idVendor")
+                product_path = os.path.join(device_dir, "idProduct")
+                product_name_path = os.path.join(device_dir, "product")
+                manufacturer_path = os.path.join(device_dir, "manufacturer")
+
+                vendor_id = self.format_value(self.utils.read_file(vendor_path))
+                product_id = self.format_value(self.utils.read_file(product_path))
+
+                if not all((vendor_id, product_id)):
+                    continue
+
+                product_name = self.format_value(self.utils.read_file(product_name_path)) or ""
+                manufacturer_name = self.format_value(self.utils.read_file(manufacturer_path)) or ""
+                
+                device_name = " ".join(filter(None, [manufacturer_name, product_name])).strip()
+
+                if not device_name:
+                    device_name, _ = self.get_usb_device_name_and_class(vendor_id, product_id)
+
+                lower_name = device_name.lower()
+                is_biometric = self.utils.contains_any(("fingerprint", "biometric", "finger print", "fprint"), lower_name)
+
+                if not is_biometric:
+                    interface_dirs = self.utils.find_matching_paths(device_dir, name_filter=":", type_filter="dir")
+                    for interface_dir, _ in interface_dirs:
+                        interface_class_path = os.path.join(device_dir, interface_dir, "bInterfaceClass")
+                        interface_class = self.format_value(self.utils.read_file(interface_class_path))
+                        if interface_class == "ff":
+                            modalias_path = os.path.join(device_dir, interface_dir, "modalias")
+                            modalias = self.format_value(self.utils.read_file(modalias_path)) or ""
+                            driver_path = os.path.join(device_dir, interface_dir, "driver")
+                            if os.path.islink(driver_path):
+                                driver_name = os.path.basename(os.readlink(driver_path)).lower()
+                                if "fingerprint" in driver_name or "fprint" in driver_name:
+                                    is_biometric = True
+                                    break
+
+                if not is_biometric:
+                    continue
+
+                device_info = {
+                    "Bus Type": "USB",
+                    "Device ID": "{}-{}".format(vendor_id, product_id).upper()
+                }
+
+                biometric_info[self.utils.get_unique_key(device_name, biometric_info)] = device_info
+
+        PLATFORM_DEVICE_PATH = "/sys/bus/platform/devices"
+        if os.path.exists(PLATFORM_DEVICE_PATH):
+            for device in os.listdir(PLATFORM_DEVICE_PATH):
+                device_dir = os.path.join(PLATFORM_DEVICE_PATH, device)
+                
+                if not os.path.isdir(device_dir):
+                    continue
+
+                description_path = os.path.join(device_dir, "description")
+                modalias_path = os.path.join(device_dir, "modalias")
+                
+                description = (self.format_value(self.utils.read_file(description_path)) or "").lower()
+                modalias = (self.format_value(self.utils.read_file(modalias_path)) or "").lower()
+                
+                if self.utils.contains_any(("fingerprint", "biometric", "fprint"), description) or \
+                   self.utils.contains_any(("fingerprint", "biometric", "fprint"), modalias):
+                    hid = device.split(":")[0].split(".")[0]
+                    device_info = {
+                        "Bus Type": "ACPI",
+                        "Device": hid
+                    }
+                    biometric_info[self.utils.get_unique_key(description or hid, biometric_info)] = device_info
 
         return biometric_info
         

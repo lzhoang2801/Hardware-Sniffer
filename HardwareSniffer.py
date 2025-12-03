@@ -21,7 +21,7 @@ class HardwareSniffer:
         self.run = run.Run().run
         self.u = utils.Utils(rich_format=rich_format)
         self.temporary_dir = tempfile.mkdtemp()
-        self.result_dir = os.path.join(os.getcwd(), result_dir)
+        self.result_dir = result_dir
 
         if os_name == "Windows":
             from Scripts.platforms.windows import WindowsHardwareInfo
@@ -232,6 +232,7 @@ class HardwareSniffer:
             
             for table_path, type in tables:
                 destination_path = os.path.join(acpi_dir, table_path.upper() + ".aml")
+                self.u.create_folder(os.path.dirname(destination_path))
 
                 out = self.run({
                     "args": ["sudo", "cp", os.path.join(table_dir, table_path), destination_path]
