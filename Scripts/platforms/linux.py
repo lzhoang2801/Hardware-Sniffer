@@ -704,7 +704,7 @@ class LinuxHardwareInfo:
                     }
                 
                     if device.get("Subsystem ID"):
-                        sound_device_info["Subsystem ID"] = device.get("Subsystem ID")
+                        sound_device_info["Subsystem ID"] = device.get("Subsystem ID")[4:] + device.get("Subsystem ID")[:4]
                     
                     if device.get("PCI Path"):
                         sound_device_info["PCI Path"] = device.get("PCI Path")
@@ -898,6 +898,17 @@ class LinuxHardwareInfo:
 
     def get_input_device_type(self, device_dir, device_name):
         """Determine the device type (Keyboard/Mouse/PS2) from device capabilities."""
+        bustype_path = os.path.join(device_dir, "id", "bustype")
+        if os.path.exists(bustype_path):
+            try:
+                bustype_val = int(self.utils.read_file(bustype_path).strip(), 16)
+                if bustype_val == 0x11:
+                    return "PS/2"
+                elif bustype_val == 0x18:
+                    return "I2C"
+            except:
+                pass
+
         capabilities_path = os.path.join(device_dir, "capabilities")
         
         if not os.path.exists(capabilities_path):
