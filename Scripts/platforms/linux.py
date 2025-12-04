@@ -598,65 +598,228 @@ class LinuxHardwareInfo:
     
     def sound(self):
         sound_info = {}
+        audio_endpoints_by_device_path = {}
+        seen_cards = set()
+        if os.path.exists("/sys/class/sound"):
+            for card in os.listdir("/sys/class/sound"):
+                if not card.startswith("card"):
+                    continue
+                
+                try:
+                    card_index = int(card.replace("card", ""))
+                except:
+                    continue
 
-        SOUND_DEVICES_PATH = "/sys/class/sound"
+                card_path = os.path.join("/sys/class/sound", card)
+                device_link = os.path.join(card_path, "device")
+                
+                if not os.path.exists(device_link):
+                    continue
+                
+                vendor_id = device_id = None
 
-        if not os.path.exists(SOUND_DEVICES_PATH):
-            return sound_info
-        
-        sound_cards = self.utils.find_matching_paths(SOUND_DEVICES_PATH, name_filter="card", type_filter="dir")
+                for property_name in os.listdir(device_link):
+                    card_property_path = os.path.join(device_link, property_name)
 
-        for sound_card, _ in sound_cards:
-            device_dir = os.path.join(SOUND_DEVICES_PATH, sound_card, "device")
+                    if property_name == "vendor":
+                        vendor_id = self.format_value(self.utils.read_file(card_property_path))
+                    elif property_name == "device":
+                        device_id = self.format_value(self.utils.read_file(card_property_path))
+                
+                if not all((vendor_id, device_id)):
+                    continue
+                
+                card_device_id = "{}-{}".format(vendor_id[2:], device_id[2:]).upper()
 
-            vendor_id = device_id = None
+                sound_device_dirs = self.utils.find_matching_paths(device_link, name_filter="hdaudio", type_filter="dir")
+                
+                for sound_device_dir, _ in sound_device_dirs:
+                    codec_name = "Unknown"
+                    codec_id = subsystem_id = bus_type = None
 
-            for property_name in os.listdir(device_dir):
-                card_property_path = os.path.join(device_dir, property_name)
+                    for property_name in os.listdir(os.path.join(device_link, sound_device_dir)):
+                        codec_property_path = os.path.join(device_link, sound_device_dir, property_name)
 
-                if property_name == "vendor":
-                    vendor_id = self.format_value(self.utils.read_file(card_property_path))
-                elif property_name == "device":
-                    device_id = self.format_value(self.utils.read_file(card_property_path))
+                        if "chip_name" == property_name:
+                            codec_name = self.format_value(self.utils.read_file(codec_property_path))
+                        elif "vendor_name" == property_name:
+                            codec_vendor = self.format_value(self.utils.read_file(codec_property_path))
+                        elif "vendor_id" == property_name:
+                            codec_id = self.format_value(self.utils.read_file(codec_property_path))[2:].upper()
+                            codec_id = "{}-{}".format(codec_id[:4], codec_id[4:])
+                        elif "subsystem_id" == property_name:
+                            subsystem_id = self.format_value(self.utils.read_file(codec_property_path))[2:].upper()
+                        elif "modalias" == property_name:
+                            bus_type = self.format_value(self.utils.read_file(codec_property_path).split(":")[0].upper())
 
-            if not all((vendor_id, device_id)):
-                continue
-            
-            card_device_id = "{}-{}".format(vendor_id[2:], device_id[2:]).upper()
+                    if all((codec_vendor, codec_name)):
+                        codec_name = "{} {}".format(codec_vendor, codec_name)
 
-            sound_device_dirs = self.utils.find_matching_paths(device_dir, name_filter="hdaudio", type_filter="dir")
+                    if all((codec_id, subsystem_id)):
+                        codec_info = {
+                            "Bus Type": bus_type,
+                            "Device ID": codec_id,
+                            "Subsystem ID": subsystem_id,
+                            "Controller Device ID": card_device_id
+                        }
+                        seen_cards.add(subsystem_id)
+                        seen_cards.add(subsystem_id[4:] + subsystem_id[:4])
+                        sound_info[self.utils.get_unique_key(codec_name, sound_info)] = codec_info
 
-            for sound_device_dir, _ in sound_device_dirs:
-                codec_name = "Unknown"
-                codec_id = subsystem_id = bus_type = None
+                real_device_path = os.path.realpath(device_link)
+                device_basename = os.path.basename(real_device_path)
+                
+                endpoints = []
+                
+                proc_card_path = "/proc/asound/card{}".format(card_index)
+                if os.path.exists(proc_card_path):
+                    for pcm in os.listdir(proc_card_path):
+                        if pcm.startswith("pcm") and (pcm.endswith("p") or pcm.endswith("c")):
+                            pcm_info_path = os.path.join(proc_card_path, pcm, "info")
+                            if os.path.exists(pcm_info_path):
+                                try:
+                                    info_content = self.utils.read_file(pcm_info_path)
+                                    for line in info_content.splitlines():
+                                        if line.startswith("name:"):
+                                            name = line.split(":", 1)[1].strip()
+                                            if name and name not in endpoints:
+                                                endpoints.append(name)
+                                except:
+                                    pass
+                
+                if endpoints:
+                    if device_basename not in audio_endpoints_by_device_path:
+                        audio_endpoints_by_device_path[device_basename] = []
+                    audio_endpoints_by_device_path[device_basename].extend(endpoints)
 
-                for property_name in os.listdir(os.path.join(device_dir, sound_device_dir)):
-                    codec_property_path = os.path.join(device_dir, sound_device_dir, property_name)
-
-                    if "chip_name" == property_name:
-                        codec_name = self.format_value(self.utils.read_file(codec_property_path))
-                    elif "vendor_name" == property_name:
-                        codec_vendor = self.format_value(self.utils.read_file(codec_property_path))
-                    elif "vendor_id" == property_name:
-                        codec_id = self.format_value(self.utils.read_file(codec_property_path))[2:].upper()
-                        codec_id = "{}-{}".format(codec_id[:4], codec_id[4:])
-                    elif "subsystem_id" == property_name:
-                        subsystem_id = self.format_value(self.utils.read_file(codec_property_path))[2:].upper()
-                    elif "modalias" == property_name:
-                        bus_type = self.format_value(self.utils.read_file(codec_property_path).split(":")[0].upper())
-
-                if all((codec_vendor, codec_name)):
-                    codec_name = "{} {}".format(codec_vendor, codec_name)
-
-                if all((codec_id, subsystem_id)):
-                    codec_info = {
-                        "Bus Type": bus_type,
-                        "Device ID": codec_id,
-                        "Subsystem ID": subsystem_id,
-                        "Controller Device ID": card_device_id
+        for class_name in ("Multimedia audio controller", "Audio device"):
+            for device in self.devices_by_class.get(class_name, []):
+                device_name = device.get("Name", "Unknown")
+                device_slot = device.get("Device Path")
+                
+                if not seen_cards.__contains__(device.get("Subsystem ID")):   
+                    sound_device_info = {
+                        "Bus Type": "PCI",
+                        "Device ID": device.get("Device ID"),
                     }
+                
+                    if device.get("Subsystem ID"):
+                        sound_device_info["Subsystem ID"] = device.get("Subsystem ID")
+                    
+                    if device.get("PCI Path"):
+                        sound_device_info["PCI Path"] = device.get("PCI Path")
+                    
+                    if device.get("ACPI Path"):
+                        sound_device_info["ACPI Path"] = device.get("ACPI Path")
 
-                    sound_info[self.utils.get_unique_key(codec_name, sound_info)] = codec_info
+                    if device_slot in audio_endpoints_by_device_path:
+                        sound_device_info["Audio Endpoints"] = sorted(list(set(audio_endpoints_by_device_path[device_slot])))
+
+                    sound_info[self.utils.get_unique_key(device_name, sound_info)] = sound_device_info
+                else:
+                    device_subsystem_id = (device.get("Subsystem ID"), device.get("Subsystem ID")[4:] + device.get("Subsystem ID")[:4])
+                    sound_device_info = next((info for info in sound_info.values() if info.get("Subsystem ID") in device_subsystem_id ), None)
+
+                    if device.get("PCI Path"):
+                        sound_device_info["PCI Path"] = device.get("PCI Path")
+                    
+                    if device.get("ACPI Path"):
+                        sound_device_info["ACPI Path"] = device.get("ACPI Path")
+
+                    if device_slot in audio_endpoints_by_device_path:
+                        sound_device_info["Audio Endpoints"] = sorted(list(set(audio_endpoints_by_device_path[device_slot])))
+
+        if os.path.exists(USB_DEVICES_PATH):
+            for device in os.listdir(USB_DEVICES_PATH):
+                device_dir = os.path.join(USB_DEVICES_PATH, device)
+                if not os.path.isdir(device_dir):
+                    continue
+                
+                is_audio = False
+                
+                b_device_class_path = os.path.join(device_dir, "bDeviceClass")
+                b_device_class = self.format_value(self.utils.read_file(b_device_class_path))
+                
+                if b_device_class == "01":
+                    is_audio = True
+                else:
+                    for interface in os.listdir(device_dir):
+                        if interface.startswith(device + ":"):
+                            interface_dir = os.path.join(device_dir, interface)
+                            b_interface_class_path = os.path.join(interface_dir, "bInterfaceClass")
+                            if os.path.exists(b_interface_class_path):
+                                b_interface_class = self.format_value(self.utils.read_file(b_interface_class_path))
+                                if b_interface_class == "01":
+                                    is_audio = True
+                                    break
+                
+                if not is_audio:
+                    continue
+                
+                vendor_path = os.path.join(device_dir, "idVendor")
+                product_path = os.path.join(device_dir, "idProduct")
+                product_name_path = os.path.join(device_dir, "product")
+                manufacturer_path = os.path.join(device_dir, "manufacturer")
+
+                vendor_id = self.format_value(self.utils.read_file(vendor_path))
+                product_id = self.format_value(self.utils.read_file(product_path))
+
+                if not all((vendor_id, product_id)):
+                    continue
+
+                product_name = self.format_value(self.utils.read_file(product_name_path)) or ""
+                manufacturer_name = self.format_value(self.utils.read_file(manufacturer_path)) or ""
+                
+                device_name = " ".join(filter(None, [manufacturer_name, product_name])).strip()
+
+                if not device_name:
+                    device_name, _ = self.get_usb_device_name_and_class(vendor_id, product_id)
+                
+                sound_device_info = {
+                    "Bus Type": "USB",
+                    "Device ID": "{}-{}".format(vendor_id, product_id).upper()
+                }
+                
+                if device in audio_endpoints_by_device_path:
+                    sound_device_info["Audio Endpoints"] = sorted(list(set(audio_endpoints_by_device_path[device])))
+
+                sound_info[self.utils.get_unique_key(device_name, sound_info)] = sound_device_info
+        
+        BLUETOOTH_DEVICE_PATH = "/sys/class/bluetooth"
+
+        if os.path.exists(BLUETOOTH_DEVICE_PATH):
+            for device in os.listdir(BLUETOOTH_DEVICE_PATH):
+                device_dir = os.path.join(BLUETOOTH_DEVICE_PATH, device)
+                uevent = self.format_value(self.utils.read_file(os.path.join(device_dir, "device", "uevent")) or "\n")
+
+                if not uevent:
+                    continue
+
+                vendor_id = product_id = class_id = bus_type = None
+
+                for line in uevent.splitlines():
+                    lower_line = line.lower()
+
+                    if "product" in lower_line:
+                        vendor_id, product_id, class_id = line.split("=")[-1].split("/")
+
+                        vendor_id = vendor_id.zfill(4)
+                        product_id = product_id.zfill(4)
+                        class_id = class_id.zfill(4)
+                    elif "modalias" in lower_line:
+                        bus_type = line.split("=")[-1].split(":")[0].upper()
+
+                if not all((vendor_id, product_id)):
+                    continue
+
+                device_name, device_class = self.get_usb_device_name_and_class(vendor_id, product_id)
+
+                sound_device_info = {
+                    "Bus Type": bus_type,
+                    "Device ID": "{}-{}".format(vendor_id, product_id).upper()
+                }
+
+                sound_info[self.utils.get_unique_key(device_name, sound_info)] = sound_device_info
 
         return sound_info
 
