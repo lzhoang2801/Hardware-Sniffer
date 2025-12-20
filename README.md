@@ -47,14 +47,17 @@
 
 ## ❓ **Q&A**
 
-- **Support for macOS and Linux?**
+- **Support for macOS?**
   - **macOS**: ❌ No. Due to potential inaccuracies caused by Hackintosh modifications, we cannot guarantee accurate information.
-  - **Linux**: 🔄 Work in progress in branch [add-linux-support](https://github.com/lzhoang2801/Hardware-Sniffer/tree/add-linux-support)
+  
+# Hardware Sniffer
 
 ## 🚀 **How To Use**
 
+### **Windows Installation**
+
 1. **Download**: Head to the [Releases](https://github.com/lzhoang2801/Hardware-Sniffer/releases) tab of Hardware Sniffer and download the latest version.
-   
+
    ![Releases Tab](https://i.imgur.com/gAoVphx.png)
 
 2. **Launch**: Run `Hardware-Sniffer.exe`. The information gathering process might take a few moments.
@@ -62,7 +65,6 @@
    ![Hardware Information Collection](https://i.imgur.com/aDB0Wsb.png)
 
 3. **Main Menu**: Once data collection is complete, you’ll reach the main screen with three options:
-
    - **T. Toggle Hardware Report View**: Switch between Short / Full view modes
    - **H. Export Hardware Report**: Save the report in JSON format
    - **A. Dump ACPI Tables**: Collect and save ACPI tables
@@ -70,9 +72,43 @@
    ![Hardware Sniffer Main](https://i.imgur.com/P0lP9pI.png)
 
 4. **Use with OpCore Simplify**: Select the two options in order: `Export hardware report` and `Dump ACPI Tables`.
+
 5. **Results**: Your output will be saved in the `Results` folder in the program's directory.
 
    ![Results](https://i.imgur.com/gxV4aLL.png)
+
+
+### **Linux Installation**
+
+1. **Download the Repository**: 
+   - You can either visit the GitHub page and download the ZIP file directly from [this link](https://github.com/Android-Artisan/Hardware-Sniffer/archive/refs/heads/main.zip), or
+   - Clone the repository using the following command:
+     ```bash
+     git clone https://github.com/Android-Artisan/Hardware-Sniffer.git
+     ```
+
+2. **Install Dependencies**: 
+   - Inside the project directory, install the necessary dependencies by running:
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+3. **Run the Script**:
+   - Execute the program by running the following command:
+     ```bash
+     python HardwareSniffer.py
+     ```
+   - This will start the information gathering process, and the results will be displayed on the screen.
+
+4. **Main Menu**:
+   Once data collection is complete, you’ll see the main menu with the following options:
+   - **T. Toggle Hardware Report View**: Switch between Short / Full view modes.
+   - **H. Export Hardware Report**: Save the report in JSON format.
+   - **A. Dump ACPI Tables**: Collect and save ACPI tables.
+
+5. **Use with OpCore Simplify**: Follow the same steps as on Windows to export the hardware report and dump the ACPI tables.
+
+6. **Results**: The output will be saved in the `Results` folder in the directory.
 
 ## 🤝 **Contributing**
 
