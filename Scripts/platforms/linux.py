@@ -230,6 +230,12 @@ class LinuxHardwareInfo:
 
         bios_info["Secure Boot"] = "Enabled" if self.format_value(self.utils.read_file("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c") or "0", "int") else "Disabled"
         bios_info["Above 4G Decoding"] = "Disabled"
+        serial = self.format_value(self.utils.read_file("/sys/class/dmi/id/product_serial"))
+        if serial:
+            bios_info["Serial Number"] = serial
+        uuid_val = self.format_value(self.utils.read_file("/sys/class/dmi/id/product_uuid"))
+        if uuid_val:
+            bios_info["UUID"] = uuid_val
 
         for class_name in self.devices_by_class:
             for device in self.devices_by_class[class_name]:
@@ -252,6 +258,69 @@ class LinuxHardwareInfo:
                                 continue
 
         return bios_info
+
+    def ram(self):
+        """Collect RAM (memory modules) information."""
+        ram_info = {}
+        total_gb = 0
+        try:
+            meminfo = self.utils.read_file("/proc/meminfo")
+            if meminfo:
+                for line in meminfo.splitlines():
+                    if line.startswith("MemTotal:"):
+                        total_kb = int(line.split()[1])
+                        total_gb = total_kb // (1024 * 1024)
+                        ram_info["Total"] = {"Total RAM": "{} GB".format(total_gb)}
+                        break
+        except (OSError, ValueError, TypeError):
+            pass
+        try:
+            output = self.run({"args": ["dmidecode", "-t", "memory"]})
+            if output[2] == 0 and output[0]:
+                current_slot = None
+                slot_data = {}
+                for line in output[0].splitlines():
+                    if line.startswith("Memory Device"):
+                        if current_slot and slot_data:
+                            size = slot_data.get("Size", "0")
+                            if "GB" in size:
+                                capacity = size
+                            elif "MB" in size:
+                                capacity = size
+                            else:
+                                capacity = "{} GB".format(int(size) // 1024) if size.isdigit() else "Unknown"
+                            ram_info[self.utils.get_unique_key(current_slot, ram_info)] = {
+                                "Capacity": capacity,
+                                "Speed": slot_data.get("Speed", "Unknown"),
+                                "Manufacturer": slot_data.get("Manufacturer", "Unknown").strip(),
+                                "Type": slot_data.get("Type", "Unknown")
+                            }
+                        current_slot = "Unknown"
+                        slot_data = {}
+                    elif ":" in line:
+                        key, val = line.split(":", 1)
+                        key = key.strip()
+                        val = val.strip()
+                        if key == "Locator":
+                            current_slot = val or "Unknown"
+                        elif key == "Size":
+                            slot_data["Size"] = val
+                        elif key == "Speed":
+                            slot_data["Speed"] = val
+                        elif key == "Manufacturer":
+                            slot_data["Manufacturer"] = val
+                        elif key == "Type":
+                            slot_data["Type"] = val
+                if current_slot and slot_data and slot_data.get("Size") != "No Module Installed":
+                    ram_info[self.utils.get_unique_key(current_slot, ram_info)] = {
+                        "Capacity": slot_data.get("Size", "Unknown"),
+                        "Speed": slot_data.get("Speed", "Unknown"),
+                        "Manufacturer": slot_data.get("Manufacturer", "Unknown").strip(),
+                        "Type": slot_data.get("Type", "Unknown")
+                    }
+        except Exception:
+            pass
+        return ram_info
     
     def get_simd_features(self, flags):
         simd_features_required = ["SSE", "SSE2", "SSE3", "SSSE3", "SSE4.1", "SSE4.2", "SSE4a", "AVX", "AVX2"]
@@ -592,6 +661,12 @@ class LinuxHardwareInfo:
 
             device_info.update(self.get_device_location_paths(device_dir))
 
+            mac_path = os.path.join(device_dir, "address")
+            if os.path.exists(mac_path):
+                mac = self.format_value(self.utils.read_file(mac_path))
+                if mac:
+                    device_info["MAC Address"] = mac
+
             network_info[self.utils.get_unique_key(device_name, network_info)] = device_info
 
         return network_info
@@ -850,6 +925,56 @@ class LinuxHardwareInfo:
             usb_controller_info[self.utils.get_unique_key(device_name, usb_controller_info)] = controller_info
 
         return usb_controller_info
+
+    def usb_ports(self):
+        """Collect ALL USB devices for Hackintosh USB mapping."""
+        usb_ports_info = {}
+        usb_devices_path = USB_DEVICES_PATH
+        if not os.path.exists(usb_devices_path):
+            return usb_ports_info
+        for device_id in os.listdir(usb_devices_path):
+            if device_id.startswith(".") or "-" not in device_id:
+                continue
+            device_path = os.path.join(usb_devices_path, device_id)
+            if not os.path.isdir(device_path):
+                continue
+            try:
+                id_vendor = (self.utils.read_file(os.path.join(device_path, "idVendor")) or "").strip().zfill(4).upper()
+                id_product = (self.utils.read_file(os.path.join(device_path, "idProduct")) or "").strip().zfill(4).upper()
+                product = (self.utils.read_file(os.path.join(device_path, "product")) or "").strip() or "Unknown"
+                manufacturer = (self.utils.read_file(os.path.join(device_path, "manufacturer")) or "").strip()
+                device_name = "{} {}".format(manufacturer, product).strip() or "USB Device"
+                if self.usb_ids and isinstance(self.usb_ids, dict) and id_vendor and id_product:
+                    try:
+                        device_name = self.usb_ids.get(id_vendor, {}).get("devices", {}).get(id_product, device_name)
+                    except (TypeError, AttributeError, KeyError):
+                        pass
+                device_info = {"Bus Type": "USB", "Device ID": "{}-{}".format(id_vendor, id_product), "Name": device_name}
+                usb_ports_info[self.utils.get_unique_key(device_name, usb_ports_info)] = device_info
+            except (OSError, IOError):
+                pass
+        return usb_ports_info
+
+    def serial_ports(self):
+        """Collect serial (COM) ports."""
+        serial_info = {}
+        for base, pattern in [("/dev", "ttyS*"), ("/dev", "ttyUSB*"), ("/dev", "ttyACM*")]:
+            if not os.path.exists(base):
+                continue
+            import glob
+            for port_path in glob.glob(os.path.join(base, pattern)):
+                port_name = os.path.basename(port_path)
+                serial_info[self.utils.get_unique_key(port_name, serial_info)] = {"Name": port_name, "Device ID": port_path}
+        return serial_info
+
+    def parallel_ports(self):
+        """Collect parallel (LPT) ports."""
+        parallel_info = {}
+        for port_path in ["/dev/lp0", "/dev/lp1", "/dev/lp2"]:
+            if os.path.exists(port_path):
+                port_name = os.path.basename(port_path)
+                parallel_info[self.utils.get_unique_key(port_name, parallel_info)] = {"Name": port_name, "Device ID": port_path}
+        return parallel_info
 
     def parse_input_device_path(self, device_dir):
         """Parse input device information from sysfs to extract vendor/device IDs and bus type."""
@@ -1323,12 +1448,16 @@ class LinuxHardwareInfo:
             ('Gathering PCI devices', self.pci_devices, None),
             ('Gathering motherboard information', self.motherboard, "Motherboard"),
             ('Gathering BIOS information', self.bios, "BIOS"),
+            ('Gathering RAM information', self.ram, "RAM"),
             ('Gathering CPU information', self.cpu, "CPU"),
             ('Gathering GPU information', self.gpu, "GPU"),
             ('Gathering monitor information', self.monitor, "Monitor"),
             ('Gathering network information', self.network, "Network"),
             ('Gathering sound information', self.sound, "Sound"),
             ('Gathering USB controllers', self.usb_controllers, "USB Controllers"),
+            ('Gathering USB ports (all devices)', self.usb_ports, "USB Ports"),
+            ('Gathering serial ports (COM)', self.serial_ports, "Serial Ports"),
+            ('Gathering parallel ports (LPT)', self.parallel_ports, "Parallel Ports"),
             ('Gathering input devices', self.input, "Input"),
             ('Gathering storage controllers', self.storage_controllers, "Storage Controllers"),
             ('Gathering biometric information', self.biometric, "Biometric"),

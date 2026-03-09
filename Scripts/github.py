@@ -63,7 +63,7 @@ class Github:
     def _generate_asset_id(self, asset_data):
         try:
             return "".join(char for char in asset_data.split("datetime=\"")[-1].split("\"")[0][::-1] if char.isdigit())[:9]
-        except:
+        except (IndexError, AttributeError, KeyError):
             return "".join(random.choices('0123456789', k=9))
     
     def extract_asset_name(self, file_name):
