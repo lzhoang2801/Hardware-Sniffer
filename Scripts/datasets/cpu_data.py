@@ -20,6 +20,7 @@ identifier = [
     ("Alder Lake-S", "Family 6 Model 151 Stepping 2"),
     ("Alder Lake-S", "Family 6 Model 151 Stepping 5"),
     ("Alder Lake-HX", "Family 6 Model 151 Stepping 2", "HX"),
+    ("Alder Lake-U", "Family 6 Model 154 Stepping 0"),
     ("Alder Lake-H", "Family 6 Model 154 Stepping 3"),
     ("Alder Lake-P", "Family 6 Model 154 Stepping 3", "P"),
     ("Alder Lake-U", "Family 6 Model 154 Stepping 4"),
