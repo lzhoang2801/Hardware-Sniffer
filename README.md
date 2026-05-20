@@ -49,16 +49,21 @@
 
 - **Support for macOS and Linux?**
   - **macOS**: ❌ No. Due to potential inaccuracies caused by Hackintosh modifications, we cannot guarantee accurate information.
-  - **Linux**: 🔄 Work in progress in branch [add-linux-support](https://github.com/lzhoang2801/Hardware-Sniffer/tree/add-linux-support)
+  - **Linux**: 🔄 Linux support is [added](https://github.com/lzhoang2801/Hardware-Sniffer/pull/44) but still monitoring effectness.
 
 ## 🚀 **How To Use**
 
-1. **Download**: Head to the [Releases](https://github.com/lzhoang2801/Hardware-Sniffer/releases) tab of Hardware Sniffer and download the latest version.
+1. **Download**: Head to the [Releases](https://github.com/lzhoang2801/Hardware-Sniffer/releases) tab of Hardware Sniffer and download the latest version of `Hardware-Sniffer.exe` for Windows and `Hardware-Sniffer-CLI-Linux` for Linux.
    
    ![Releases Tab](https://i.imgur.com/gAoVphx.png)
 
-2. **Launch**: Run `Hardware-Sniffer.exe`. The information gathering process might take a few moments.
+2. **Launch**:
 
+   **For Windows**: Run `Hardware-Sniffer.exe`.
+
+   **For Linux**: You will need to set linux executable file as executable first. Type `sudo chmod +x Hardware-Sniffer-CLI-Linux` in terminal first than you will be able to run it inside terminal *(`./Hardware-Sniffer-CLI-Linux`)*.
+
+   The information gathering process might take a few moments.
    ![Hardware Information Collection](https://i.imgur.com/aDB0Wsb.png)
 
 3. **Main Menu**: Once data collection is complete, you’ll reach the main screen with three options:
