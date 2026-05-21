@@ -48,6 +48,23 @@ class HardwareSniffer:
             firmware_type = data["BIOS"].get("Firmware Type", "N/A")
             secure_boot = data["BIOS"].get("Secure Boot", "N/A")
             summary.append("BIOS: {} ({}), {}, {}, {} Secure Boot".format(bios_version, bios_release_date, system_type, firmware_type, secure_boot.lower()))
+            if data["BIOS"].get("Serial Number"):
+                summary.append("   Serial: {}".format(data["BIOS"]["Serial Number"]))
+            if data["BIOS"].get("UUID"):
+                summary.append("   UUID: {}".format(data["BIOS"]["UUID"]))
+        
+        if "RAM" in data and data["RAM"]:
+            total = data["RAM"].get("Total", {}).get("Total RAM", "N/A")
+            summary.append("RAM: {}".format(total))
+            for key, ram_data in data["RAM"].items():
+                if key != "Total" and isinstance(ram_data, dict):
+                    slot_info = "{} {} {} MHz".format(
+                        ram_data.get("Capacity", "?"),
+                        ram_data.get("Type", ""),
+                        ram_data.get("Speed", "?").replace(" MHz", "") if ram_data.get("Speed") else "?"
+                    ).strip()
+                    if slot_info and slot_info != "? ?":
+                        summary.append("   {}: {} ({})".format(key, slot_info, ram_data.get("Manufacturer", "")))
         
         if "CPU" in data and data["CPU"]:
             cpu_name = data["CPU"].get("Processor Name", "N/A")
@@ -74,8 +91,11 @@ class HardwareSniffer:
             for index, (network_name, network_data) in enumerate(data["Network"].items(), start=1):
                 bus_type = network_data.get("Bus Type", "N/A")
                 device_id = network_data.get("Device ID", "N/A")
+                mac = network_data.get("MAC Address", "")
                 network_name = network_name[:36] + "..." if len(network_name) > 36 else network_name
                 summary.append("Network {}: {} ({}, {})".format(index, network_name, bus_type, device_id))
+                if mac:
+                    summary.append("   MAC: {}".format(mac))
 
         if "Sound" in data and data["Sound"]:
             for index, (sound_name, sound_data) in enumerate(data["Sound"].items(), start=1):
@@ -92,6 +112,25 @@ class HardwareSniffer:
                 device_id = usb_controller_data.get("Device ID", "N/A")
                 usb_controller_name = usb_controller_name[:36] + "..." if len(usb_controller_name) > 36 else usb_controller_name
                 summary.append("USB Controller {}: {} ({}, {})".format(index, usb_controller_name, bus_type, device_id))
+
+        if "USB Ports" in data and data["USB Ports"]:
+            for index, (usb_port_name, usb_port_data) in enumerate(data["USB Ports"].items(), start=1):
+                port_type = usb_port_data.get("Type", "N/A")
+                device_id = usb_port_data.get("Device ID", usb_port_data.get("Bus Type", "N/A"))
+                usb_port_name = usb_port_name[:36] + "..." if len(usb_port_name) > 36 else usb_port_name
+                summary.append("USB Port {}: {} ({}, {})".format(index, usb_port_name, port_type, device_id))
+
+        if "Serial Ports" in data and data["Serial Ports"]:
+            for index, (port_name, port_data) in enumerate(data["Serial Ports"].items(), start=1):
+                device_id = port_data.get("Device ID", "N/A")
+                port_name = port_name[:36] + "..." if len(port_name) > 36 else port_name
+                summary.append("Serial Port {}: {} ({})".format(index, port_name, device_id))
+
+        if "Parallel Ports" in data and data["Parallel Ports"]:
+            for index, (port_name, port_data) in enumerate(data["Parallel Ports"].items(), start=1):
+                device_id = port_data.get("Device ID", "N/A")
+                port_name = port_name[:36] + "..." if len(port_name) > 36 else port_name
+                summary.append("Parallel Port {}: {} ({})".format(index, port_name, device_id))
 
         if "Input" in data and data["Input"]:
             for index, (input_name, input_data) in enumerate(data["Input"].items(), start=1):
@@ -150,15 +189,17 @@ class HardwareSniffer:
         print("")
 
     def get_latest_acpidump(self):
-        return "https://github.com/acpica/acpica/releases/download/R2024_12_12/acpidump.exe"
-
-        latest_release = self.github.get_latest_release("acpica", "acpica") or {}
-        
-        for asset in latest_release.get("assets"):
-            if asset.get("product_name") == "acpidump":
-                return asset.get("url")
-            
-        return None
+        fallback_url = "https://github.com/acpica/acpica/releases/download/R2024_12_12/acpidump.exe"
+        try:
+            latest_release = self.github.get_latest_release("acpica", "acpica") or {}
+            for asset in latest_release.get("assets", []):
+                if asset.get("product_name") == "acpidump":
+                    url = asset.get("url")
+                    if url:
+                        return url
+        except Exception:
+            pass
+        return fallback_url
 
     def check_acpidump(self):
         acpidump_path = os.path.join(os.getcwd(), "acpidump.exe")
@@ -179,7 +220,7 @@ class HardwareSniffer:
 
             if not os.path.exists(acpidump_path):
                 raise Exception("Failed to download acpidump.exe.")
-        except:
+        except Exception:
             raise Exception("Could not locate or download acpidump.exe!\n\nPlease manually download acpidump.exe from:\n - {}\n\nAnd place in:\n - {}\n".format(
                 "https://github.com/acpica/acpica/releases",
                 os.path.dirname(os.path.realpath(__file__))

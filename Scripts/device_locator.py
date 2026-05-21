@@ -45,7 +45,7 @@ class WindowsDeviceLocator:
     def get_device_location_paths(self, device):
         try:
             location_paths = (device.GetDeviceProperties(["DEVPKEY_Device_LocationPaths"])[0][0].Data)
-        except:
+        except (AttributeError, TypeError, IndexError):
             return {}
 
         acpi_path = pci_path = None
