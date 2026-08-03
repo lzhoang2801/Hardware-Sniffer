@@ -49,7 +49,7 @@
 
 - **Support for macOS and Linux?**
   - **macOS**: ❌ No. Due to potential inaccuracies caused by Hackintosh modifications, we cannot guarantee accurate information.
-  - **Linux**: 🔄 Work in progress in branch [add-linux-support](https://github.com/lzhoang2801/Hardware-Sniffer/tree/add-linux-support)
+  - **Linux**: ✅ Yes. Supported on `main` since the Linux platform implementation was merged. Hardware details are collected from the Linux kernel (`/sys`), and the resulting report and ACPI dump are fully compatible with OpCore Simplify.
 
 ## 🚀 **How To Use**
 
@@ -73,6 +73,18 @@
 5. **Results**: Your output will be saved in the `Results` folder in the program's directory.
 
    ![Results](https://i.imgur.com/gxV4aLL.png)
+
+6. **Linux**: Run the CLI with Python. The export and ACPI dump are done automatically:
+
+   ```bash
+   python3 Hardware-Sniffer-CLI.py -e
+   ```
+
+   By default the report is saved to `SysReport/Report.json` and the ACPI tables to `SysReport/ACPI/`. Use `-o <dir>` to change the output directory. The GUI version is also available:
+
+   ```bash
+   python3 HardwareSniffer.py
+   ```
 
 ## 🤝 **Contributing**
 
