@@ -10,6 +10,16 @@ import os
 PCI_DEVICES_PATH = "/sys/bus/pci/devices"
 USB_DEVICES_PATH = "/sys/bus/usb/devices"
 
+# Kernel DRM connector types (drm_connector_enum) mapped to the connector
+# vocabulary expected by OpCore Simplify's report validator
+DRM_CONNECTOR_TYPE_MAP = {
+    "HDMI-A": "HDMI",
+    "HDMI-B": "HDMI",
+    "DVI-I": "DVI",
+    "DVI-D": "DVI",
+    "DVI-A": "DVI",
+}
+
 class LinuxHardwareInfo:
     def __init__(self, rich_format=True):
         self.lookup_codename = cpu_identifier.CPUIdentifier().lookup_codename
@@ -531,6 +541,7 @@ class LinuxHardwareInfo:
 
                     try:
                         connector_type = "-".join(os.path.basename(os.path.dirname(edid_path)).split("-")[1:-1])
+                        connector_type = DRM_CONNECTOR_TYPE_MAP.get(connector_type, connector_type)
                     except:
                         connector_type = "Uninitialized"
 
