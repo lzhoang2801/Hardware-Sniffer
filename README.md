@@ -101,4 +101,4 @@ Distributed under the BSD 3-Clause License. See `LICENSE` for more information.
 
 ## 🌟 **Star History**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=lzhoang2801/Hardware-Sniffer&type=Date)](https://star-history.com/#lzhoang2801/Hardware-Sniffer&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=lzhoang2801/Hardware-Sniffer&type=Date)](https://star-history.dera.page/#lzhoang2801/Hardware-Sniffer&Date)
