@@ -12,9 +12,9 @@ class WindowsDeviceLocator:
         
         for component in components:
             if component.startswith("PCIROOT"):
-                match = re.match(r"PCIROOT\((\d+)\)", component)
+                match = re.match(r"PCIROOT\((\w+)\)", component)
                 if match:
-                    result.append("PciRoot(0x{:x})".format(int(match.group(1))))
+                    result.append("PciRoot(0x{:x})".format(int(match.group(1), 16)))
             elif component.startswith("PCI"):
                 match = re.match(r"PCI\((\w+)\)", component)
                 if match:

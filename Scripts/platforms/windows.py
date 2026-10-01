@@ -187,6 +187,9 @@ class WindowsHardwareInfo:
             except Exception as e:
                 pass
 
+        if not bios_info.get("Firmware Type"):
+            bios_info["Firmware Type"] = "UEFI"
+
         registry_path = r"SYSTEM\CurrentControlSet\Control\SecureBoot\State"
         try:
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, registry_path) as base_key:
@@ -196,6 +199,9 @@ class WindowsHardwareInfo:
             pass
         except Exception as e:
             pass
+
+        if not bios_info.get("Secure Boot"):
+            bios_info["Secure Boot"] = "Disabled"
 
         return bios_info
 
