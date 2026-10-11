@@ -1,3 +1,5 @@
+from .datasets import gpu_data
+
 class GPUIdentifier:
     def identify_intel_graphics(self, hardware_id):
         gpu_codename = None
