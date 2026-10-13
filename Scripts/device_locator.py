@@ -122,6 +122,8 @@ class LinuxDeviceLocator:
             acpi_path = acpi_path.strip()
             if acpi_path.startswith("\\_SB_."):
                 acpi_path = "\\_SB." + acpi_path[6:]
-            device_location_paths["ACPI Path"] = acpi_path
+                device_location_paths["ACPI Path"] = acpi_path
+            # Only emit ACPI paths under the \_SB scope; OpCore Simplify's
+            # report validator does not accept other scopes (e.g. \_TZ_)
 
         return device_location_paths
