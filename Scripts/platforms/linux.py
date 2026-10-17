@@ -6,6 +6,13 @@ from .. import run
 from .. import utils
 import time
 import os
+import logging
+import functools
+import shutil
+
+# Setup logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
 PCI_DEVICES_PATH = "/sys/bus/pci/devices"
 USB_DEVICES_PATH = "/sys/bus/usb/devices"
@@ -18,8 +25,66 @@ class LinuxHardwareInfo:
         self.run = run.Run().run
         self.utils = utils.Utils(rich_format=rich_format)
         self.usb_ids = self.utils.read_file(self.utils.get_full_path("Scripts", "datasets", "usb.ids"))
+        
+        # Cache for command availability
+        self._cmd_cache = {}
+        # Cache for file reads
+        self._file_cache = {}
+        
+        # Check for required commands
+        self._check_required_commands()
 
+    def _check_required_commands(self):
+        """Check availability of required system commands."""
+        required_cmds = ['lspci', 'lsusb']
+        for cmd in required_cmds:
+            self._cmd_cache[cmd] = shutil.which(cmd) is not None
+            if not self._cmd_cache[cmd]:
+                logger.warning(f"Command '{cmd}' not found. Some hardware detection may be limited.")
+    
+    def _is_command_available(self, command):
+        """Check if a command is available in the system."""
+        if command not in self._cmd_cache:
+            self._cmd_cache[command] = shutil.which(command) is not None
+        return self._cmd_cache[command]
+    
+    def _safe_read_file(self, file_path, cache=False):
+        """Safely read a file with error handling."""
+        if not file_path or not os.path.exists(file_path):
+            return None
+        
+        if cache and file_path in self._file_cache:
+            return self._file_cache[file_path]
+        
+        try:
+            content = self.utils.read_file(file_path)
+            if cache:
+                self._file_cache[file_path] = content
+            return content
+        except (IOError, OSError, PermissionError) as e:
+            logger.debug(f"Error reading file {file_path}: {e}")
+            return None
+    
+    def _safe_path_exists(self, path):
+        """Safely check if a path exists."""
+        try:
+            return os.path.exists(path)
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Error checking path {path}: {e}")
+            return False
+    
+    def _safe_listdir(self, path):
+        """Safely list directory contents."""
+        try:
+            if not os.path.exists(path):
+                return []
+            return os.listdir(path)
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Error listing directory {path}: {e}")
+            return []
+    
     def format_value(self, value, type="string"):
+        """Format and validate a value."""
         if not value:
             return None
         
@@ -28,94 +93,123 @@ class LinuxHardwareInfo:
         try:
             if type == "int":
                 return int(value)
-        except:
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Error formatting value: {e}")
             return None
         
         return value
     
     def get_pci_device_name_and_class(self, device_slot_name):
-        output = self.run({
-            "args": ["lspci", "-vmm", "-s", device_slot_name]
-        })
-
-        if output[2] != 0:
+        """Get PCI device name and class using lspci command."""
+        if not device_slot_name:
             return "Unknown", "Unknown"
+        
+        if not self._is_command_available('lspci'):
+            logger.warning("lspci command not available")
+            return "Unknown", "Unknown"
+        
+        try:
+            output = self.run({
+                "args": ["lspci", "-vmm", "-s", device_slot_name]
+            })
 
-        device_class = vendor_name = device_name = None
+            if output[2] != 0:
+                logger.debug(f"lspci failed for device {device_slot_name}")
+                return "Unknown", "Unknown"
 
-        for line in output[0].splitlines():
-            lower_line = line.lower()
+            device_class = vendor_name = device_name = None
 
-            if "class" in lower_line:
-                device_class = line.split(":")[-1].strip()
-            elif "vendor" in lower_line:
-                vendor_name = line.split(":")[-1].strip()
-            elif "device" in lower_line:
-                device_name = line.split(":")[-1].strip()
+            for line in output[0].splitlines():
+                lower_line = line.lower()
 
-            if all((device_class, device_name)):
-                break
+                if "class" in lower_line:
+                    device_class = line.split(":")[-1].strip()
+                elif "vendor" in lower_line:
+                    vendor_name = line.split(":")[-1].strip()
+                elif "device" in lower_line:
+                    device_name = line.split(":")[-1].strip()
 
-        device_name = " ".join((name for name in (vendor_name, device_name) if name))
+                if all((device_class, device_name)):
+                    break
 
-        if not device_name:
-            device_name = "Unknown"
+            device_name = " ".join((name for name in (vendor_name, device_name) if name))
 
-        if not device_class:
-            device_class = "Unknown"
-        else:
-            device_class = device_class.split("[")[0].strip()
+            if not device_name:
+                device_name = "Unknown"
 
-        return device_name, device_class
+            if not device_class:
+                device_class = "Unknown"
+            else:
+                device_class = device_class.split("[")[0].strip()
+
+            return device_name, device_class
+        except Exception as e:
+            logger.error(f"Error getting PCI device info for {device_slot_name}: {e}")
+            return "Unknown", "Unknown"
 
     def get_usb_device_name_and_class(self, vendor_id, device_id):
-        output = self.run({
-            "args": ["lsusb", "-v", "-d", "{}:{}".format(vendor_id, device_id)]
-        })
-
-        if output[2] != 0:
+        """Get USB device name and class using lsusb command."""
+        if not vendor_id or not device_id:
             return "Unknown", "Unknown"
+        
+        if not self._is_command_available('lsusb'):
+            logger.warning("lsusb command not available")
+            return "Unknown", "Unknown"
+        
+        try:
+            output = self.run({
+                "args": ["lsusb", "-v", "-d", "{}:{}".format(vendor_id, device_id)]
+            })
 
-        device_class = vendor_name = product_name = None
+            if output[2] != 0:
+                logger.debug(f"lsusb failed for device {vendor_id}:{device_id}")
+                return "Unknown", "Unknown"
 
-        for line in output[0].splitlines():
-            lower_line = line.lower()
-            value = " ".join(line.split()[2:]).strip()
+            device_class = vendor_name = product_name = None
 
-            if not value:
-                continue
+            for line in output[0].splitlines():
+                lower_line = line.lower()
+                value = " ".join(line.split()[2:]).strip()
 
-            if "bdeviceprotocol" in lower_line:
-                device_class = value
-            elif "idvendor" in lower_line:
-                vendor_name = value
-            elif "idproduct" in lower_line:
-                product_name = value
-            elif "iproduct" in lower_line:
-                product_name = value
+                if not value:
+                    continue
 
-        device_name = " ".join((name for name in (vendor_name, product_name) if name))
+                if "bdeviceprotocol" in lower_line:
+                    device_class = value
+                elif "idvendor" in lower_line:
+                    vendor_name = value
+                elif "idproduct" in lower_line:
+                    product_name = value
+                elif "iproduct" in lower_line:
+                    product_name = value
 
-        if not device_name:
-            device_name = "Unknown"
-        if not device_class:
-            device_class = "Unknown"
+            device_name = " ".join((name for name in (vendor_name, product_name) if name))
 
-        return device_name, device_class       
+            if not device_name:
+                device_name = "Unknown"
+            if not device_class:
+                device_class = "Unknown"
+
+            return device_name, device_class
+        except Exception as e:
+            logger.error(f"Error getting USB device info for {vendor_id}:{device_id}: {e}")
+            return "Unknown", "Unknown"       
 
     def pci_devices(self):
+        """Collect PCI device information from sysfs."""
         self.devices_by_class = {}
         self.chipset_model = "Unknown"
 
         pci_devices_data = {}
 
-        if not os.path.exists(PCI_DEVICES_PATH):
+        if not self._safe_path_exists(PCI_DEVICES_PATH):
+            logger.warning(f"PCI devices path not found: {PCI_DEVICES_PATH}")
             return pci_devices_data
         
-        for device_slot_name in os.listdir(PCI_DEVICES_PATH):
+        for device_slot_name in self._safe_listdir(PCI_DEVICES_PATH):
             device_dir = os.path.join(PCI_DEVICES_PATH, device_slot_name)
 
-            if not os.path.exists(device_dir):
+            if not self._safe_path_exists(device_dir):
                 continue
 
             device_name, device_class = self.get_pci_device_name_and_class(device_slot_name)
@@ -125,19 +219,23 @@ class LinuxHardwareInfo:
 
             vendor_id = device_id = subsystem_vendor_id = subsystem_device_id = None
 
-            for property_name in os.listdir(device_dir):
+            for property_name in self._safe_listdir(device_dir):
                 device_property_path = os.path.join(device_dir, property_name)
 
                 if property_name == "vendor":
-                    vendor_id = self.format_value(self.utils.read_file(device_property_path))
+                    vendor_id = self.format_value(self._safe_read_file(device_property_path))
                 elif property_name == "device":
-                    device_id = self.format_value(self.utils.read_file(device_property_path))
+                    device_id = self.format_value(self._safe_read_file(device_property_path))
                 elif property_name == "subsystem_vendor":
-                    subsystem_vendor_id = self.format_value(self.utils.read_file(device_property_path))
+                    subsystem_vendor_id = self.format_value(self._safe_read_file(device_property_path))
                 elif property_name == "subsystem_device":
-                    subsystem_device_id = self.format_value(self.utils.read_file(device_property_path))
+                    subsystem_device_id = self.format_value(self._safe_read_file(device_property_path))
 
             if not all((device_name, vendor_id, device_id)):
+                continue
+            
+            # Ensure IDs have sufficient length for slicing
+            if len(vendor_id) < 2 or len(device_id) < 2:
                 continue
 
             device_info = {
@@ -148,7 +246,8 @@ class LinuxHardwareInfo:
             }
 
             if all((subsystem_vendor_id, subsystem_device_id)):
-                device_info["Subsystem ID"] = "{}{}".format(subsystem_device_id[2:], subsystem_vendor_id[2:]).upper()
+                if len(subsystem_vendor_id) >= 2 and len(subsystem_device_id) >= 2:
+                    device_info["Subsystem ID"] = "{}{}".format(subsystem_device_id[2:], subsystem_vendor_id[2:]).upper()
 
             device_info.update(self.get_device_location_paths(device_dir))
 
@@ -160,20 +259,23 @@ class LinuxHardwareInfo:
         return pci_devices_data
           
     def motherboard(self):
-        manufacturer = self.format_value(self.utils.read_file("/sys/class/dmi/id/sys_vendor") or "").split(" ")[0]
-        model = self.format_value(self.utils.read_file("/sys/class/dmi/id/product_name") or "")
+        """Collect motherboard information from DMI/sysfs."""
+        manufacturer_raw = self.format_value(self._safe_read_file("/sys/class/dmi/id/sys_vendor", cache=True) or "") or ""
+        manufacturer = manufacturer_raw.split(" ")[0] if manufacturer_raw else ""
+        model = self.format_value(self._safe_read_file("/sys/class/dmi/id/product_name", cache=True) or "") or ""
 
-        board_manufacturer = self.format_value(self.utils.read_file("/sys/class/dmi/id/board_vendor") or "").split(" ")[0]
-        board_model = self.format_value(self.utils.read_file("/sys/class/dmi/id/board_name") or "")
+        board_manufacturer_raw = self.format_value(self._safe_read_file("/sys/class/dmi/id/board_vendor", cache=True) or "") or ""
+        board_manufacturer = board_manufacturer_raw.split(" ")[0] if board_manufacturer_raw else ""
+        board_model = self.format_value(self._safe_read_file("/sys/class/dmi/id/board_name", cache=True) or "") or ""
 
         for prefix in ("unknown", "manufacturer", "o.e.m.", "product"):
-            if prefix in board_manufacturer.lower():
+            if board_manufacturer and prefix in board_manufacturer.lower():
                 board_manufacturer = ""
-            if prefix in board_model.lower():
+            if board_model and prefix in board_model.lower():
                 board_model = ""
-            if prefix in manufacturer.lower():
+            if manufacturer and prefix in manufacturer.lower():
                 manufacturer = board_manufacturer
-            if prefix in model.lower():
+            if model and prefix in model.lower():
                 model = board_model
 
         if len(manufacturer) < len(board_manufacturer):
@@ -199,16 +301,19 @@ class LinuxHardwareInfo:
                 chipset_model = chipset_name
                 break
 
-        system_platform = self.utils.read_file("/sys/class/dmi/id/chassis_type") or "Unspecified"
-
+        system_platform = "Unspecified"
+        
         try:
-            system_platform = int(self.utils.read_file("/sys/class/dmi/id/chassis_type"))
+            chassis_type_str = self._safe_read_file("/sys/class/dmi/id/chassis_type", cache=True)
+            if chassis_type_str:
+                system_platform = int(chassis_type_str.strip())
 
-            if system_platform in (2, 8, 9, 10):
-                system_platform = "Laptop"
-            else:
-                system_platform = "Desktop"
-        except:
+                if system_platform in (2, 8, 9, 10):
+                    system_platform = "Laptop"
+                else:
+                    system_platform = "Desktop"
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Error determining chassis type: {e}")
             system_platform = "Unspecified"
                 
         return {
@@ -218,17 +323,19 @@ class LinuxHardwareInfo:
         }
 
     def bios(self):
+        """Collect BIOS/UEFI information."""
         bios_info = {}
 
-        bios_info["Version"] = self.format_value(self.utils.read_file("/sys/class/dmi/id/bios_version")) or "Unknown"
-        bios_info["Release Date"] = self.format_value(self.utils.read_file("/sys/class/dmi/id/bios_date")) or "Unknown"
+        bios_info["Version"] = self.format_value(self._safe_read_file("/sys/class/dmi/id/bios_version", cache=True)) or "Unknown"
+        bios_info["Release Date"] = self.format_value(self._safe_read_file("/sys/class/dmi/id/bios_date", cache=True)) or "Unknown"
 
-        if os.path.exists("/sys/firmware/efi"):
+        if self._safe_path_exists("/sys/firmware/efi"):
             bios_info["Firmware Type"] = "UEFI"
         else:
             bios_info["Firmware Type"] = "BIOS"
 
-        bios_info["Secure Boot"] = "Enabled" if self.format_value(self.utils.read_file("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c") or "0", "int") else "Disabled"
+        secure_boot_value = self.format_value(self._safe_read_file("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c") or "0", "int")
+        bios_info["Secure Boot"] = "Enabled" if secure_boot_value else "Disabled"
         bios_info["Above 4G Decoding"] = "Disabled"
 
         for class_name in self.devices_by_class:
@@ -236,19 +343,27 @@ class LinuxHardwareInfo:
                 if device.get("Device Path"):
                     device_dir = os.path.join(PCI_DEVICES_PATH, device.get("Device Path"))
 
-                    if os.path.exists(device_dir):
+                    if self._safe_path_exists(device_dir):
                         for resource_path, _ in self.utils.find_matching_paths(device_dir, name_filter="resource", type_filter="file"):
                             try:
-                                resource = self.utils.read_file(os.path.join(device_dir, resource_path))
+                                resource = self._safe_read_file(os.path.join(device_dir, resource_path))
+                                if not resource:
+                                    continue
 
                                 for line in resource.splitlines():
                                     line = line.strip()
+                                    parts = line.split()
+                                    
+                                    if len(parts) < 3:
+                                        continue
 
-                                    start_address, end_address, flags = line.split()[0:3]
+                                    start_address, end_address, flags = parts[0:3]
 
                                     if int(end_address, 16) >= 2**32:
                                         bios_info["Above 4G Decoding"] = "Enabled"
-                            except:
+                                        break
+                            except (ValueError, IndexError) as e:
+                                logger.debug(f"Error parsing resource file: {e}")
                                 continue
 
         return bios_info
@@ -264,10 +379,16 @@ class LinuxHardwareInfo:
         return ", ".join(simd_feature_support) if simd_feature_support else "SIMD Capabilities Unknown"
     
     def cpu(self):
+        """Collect CPU information from /proc/cpuinfo."""
         try:
-            cpu_cores = self.utils.read_file("/proc/cpuinfo").split("\n\n")
-        except:
-            cpu_cores = []
+            cpuinfo_content = self._safe_read_file("/proc/cpuinfo")
+            if not cpuinfo_content:
+                logger.warning("Could not read /proc/cpuinfo")
+                return None
+            cpu_cores = cpuinfo_content.split("\n\n")
+        except Exception as e:
+            logger.error(f"Error reading CPU info: {e}")
+            return None
 
         cpu_brand = None
         cpu_model = None
@@ -315,11 +436,13 @@ class LinuxHardwareInfo:
             }
        
     def gpu(self):
+        """Collect GPU information from DRM subsystem."""
         gpu_info = {}
 
         DRM_DEVICES_PATH = "/sys/class/drm"
 
-        if not os.path.exists(DRM_DEVICES_PATH):
+        if not self._safe_path_exists(DRM_DEVICES_PATH):
+            logger.warning(f"DRM devices path not found: {DRM_DEVICES_PATH}")
             return gpu_info
         
         graphics_devices = self.utils.find_matching_paths(DRM_DEVICES_PATH, name_filter="card", type_filter="dir")
@@ -329,7 +452,8 @@ class LinuxHardwareInfo:
                 continue
 
             device_dir = os.path.join(DRM_DEVICES_PATH, graphics_device)
-            uevent = self.format_value(self.utils.read_file(os.path.join(device_dir, "device", "uevent")) or "\n")
+            uevent_path = os.path.join(device_dir, "device", "uevent")
+            uevent = self.format_value(self._safe_read_file(uevent_path) or "\n")
 
             if not uevent:
                 continue
@@ -378,13 +502,19 @@ class LinuxHardwareInfo:
 
             device_info["Resizable BAR"] = "Disabled"
 
-            if os.path.exists(device_dir):
+            if self._safe_path_exists(device_dir):
                 for resource_path, _ in self.utils.find_matching_paths(device_dir, name_filter="resource", type_filter="file"):
                     try:
-                        resource = self.utils.read_file(os.path.join(device_dir, resource_path))
+                        resource = self._safe_read_file(os.path.join(device_dir, resource_path))
+                        if not resource:
+                            continue
+                        
                         parts = resource.split()
 
                         for index in range(0, len(parts), 3):
+                            if index + 2 >= len(parts):
+                                break
+                            
                             start_address, end_address, flags = parts[index:index + 3]
 
                             start_address = int(start_address, 16)
@@ -393,7 +523,9 @@ class LinuxHardwareInfo:
 
                             if memory_size >= 2**32:
                                 device_info["Resizable BAR"] = "Enabled"
-                    except:
+                                break
+                    except (ValueError, IndexError) as e:
+                        logger.debug(f"Error parsing GPU resource: {e}")
                         continue
 
             device_info["Device Path"] = device_dir
@@ -428,9 +560,10 @@ class LinuxHardwareInfo:
         return c1 + c2 + c3
     
     def parse_edid(self, edid_bytes):
+        """Parse EDID data from monitor."""
         edid_data = {}
 
-        if len(edid_bytes) < 128:
+        if not edid_bytes or len(edid_bytes) < 128:
             return edid_data
         
         try:
@@ -479,80 +612,94 @@ class LinuxHardwareInfo:
             if len(edid_bytes) > 128:
                 extension_blocks = edid_bytes[128:]
                 edid_data['extension_blocks'] = extension_blocks.hex()
-        except:
+        except Exception as e:
+            logger.debug(f"Error parsing EDID: {e}")
             pass
 
         return edid_data
                         
     def monitor(self):
+        """Collect monitor information from connected displays."""
         monitor_info = {}
 
         for gpu_name, gpu_info in self.result.get("GPU", {}).items():
             gpu_dir = gpu_info.get("Device Path")
             del gpu_info["Device Path"]
 
-            if os.path.exists(gpu_dir):
-                for edid_path, _ in self.utils.find_matching_paths(gpu_dir, name_filter="edid", type_filter="file"):
-                    monitor_name = "Unknown"
+            if not gpu_dir or not self._safe_path_exists(gpu_dir):
+                continue
+            
+            for edid_path, _ in self.utils.find_matching_paths(gpu_dir, name_filter="edid", type_filter="file"):
+                monitor_name = "Unknown"
 
-                    edid_parsed = self.parse_edid(self.utils.read_file(os.path.join(gpu_dir, edid_path)))
+                edid_parsed = self.parse_edid(self._safe_read_file(os.path.join(gpu_dir, edid_path)))
 
-                    if all((edid_parsed.get("manufacturer_id"), edid_parsed.get("product_code"))):
-                        monitor_name = "{}{}".format(edid_parsed.get("manufacturer_id"), edid_parsed.get("product_code"))
+                if all((edid_parsed.get("manufacturer_id"), edid_parsed.get("product_code"))):
+                    monitor_name = "{}{}".format(edid_parsed.get("manufacturer_id"), edid_parsed.get("product_code"))
 
-                    connected = False
-                    max_h_active = 0
-                    max_v_active = 0            
+                connected = False
+                max_h_active = 0
+                max_v_active = 0            
 
-                    monitor_dir = os.path.join(gpu_dir, os.path.dirname(edid_path))
-                    
-                    for property_name in os.listdir(monitor_dir):
-                        monitor_property_path = os.path.join(monitor_dir, property_name)
+                monitor_dir = os.path.join(gpu_dir, os.path.dirname(edid_path))
+                
+                if not self._safe_path_exists(monitor_dir):
+                    continue
+                
+                for property_name in self._safe_listdir(monitor_dir):
+                    monitor_property_path = os.path.join(monitor_dir, property_name)
 
-                        if property_name == "status":
-                            connected = "connected" == self.format_value(self.utils.read_file(monitor_property_path))
-                            
-                            if not connected:
-                                break
-                        elif property_name == "modes":
-                            for mode in self.format_value(self.utils.read_file(monitor_property_path) or "\n").splitlines():
-                                try:
-                                    h_active, v_active = map(int, mode.split("x"))
+                    if property_name == "status":
+                        status_value = self.format_value(self._safe_read_file(monitor_property_path))
+                        connected = "connected" == status_value
+                        
+                        if not connected:
+                            break
+                    elif property_name == "modes":
+                        modes_content = self.format_value(self._safe_read_file(monitor_property_path) or "\n")
+                        for mode in modes_content.splitlines():
+                            try:
+                                h_active, v_active = map(int, mode.split("x"))
 
-                                    max_h_active = max(max_h_active, h_active)
-                                    max_v_active = max(max_v_active, v_active)
-                                except:
-                                    continue
+                                max_h_active = max(max_h_active, h_active)
+                                max_v_active = max(max_v_active, v_active)
+                            except (ValueError, AttributeError) as e:
+                                logger.debug(f"Error parsing monitor mode: {e}")
+                                continue
 
-                    if not connected:
-                        continue
+                if not connected:
+                    continue
 
-                    max_resolution = "{}x{}".format(max_h_active, max_v_active)
+                max_resolution = "{}x{}".format(max_h_active, max_v_active)
 
-                    try:
-                        connector_type = "-".join(os.path.basename(os.path.dirname(edid_path)).split("-")[1:-1])
-                    except:
-                        connector_type = "Uninitialized"
+                try:
+                    connector_type = "-".join(os.path.basename(os.path.dirname(edid_path)).split("-")[1:-1])
+                except (IndexError, AttributeError) as e:
+                    logger.debug(f"Error parsing connector type: {e}")
+                    connector_type = "Uninitialized"
 
-                    monitor_info[self.utils.get_unique_key(monitor_name, monitor_info)] = {
-                        "Connector Type": connector_type,
-                        "Resolution": max_resolution,
-                        "Connected GPU": gpu_name
-                    }
+                monitor_info[self.utils.get_unique_key(monitor_name, monitor_info)] = {
+                    "Connector Type": connector_type,
+                    "Resolution": max_resolution,
+                    "Connected GPU": gpu_name
+                }
 
         return monitor_info
                     
     def network(self):
+        """Collect network interface information."""
         network_info = {}
 
         NET_DEVICES_PATH = "/sys/class/net"
 
-        if not os.path.exists(NET_DEVICES_PATH):
+        if not self._safe_path_exists(NET_DEVICES_PATH):
+            logger.warning(f"Network devices path not found: {NET_DEVICES_PATH}")
             return network_info
         
-        for device in os.listdir(NET_DEVICES_PATH):
+        for device in self._safe_listdir(NET_DEVICES_PATH):
             device_dir = os.path.join(NET_DEVICES_PATH, device)
-            uevent = self.format_value(self.utils.read_file(os.path.join(device_dir, "device", "uevent")) or "\n")
+            uevent_path = os.path.join(device_dir, "device", "uevent")
+            uevent = self.format_value(self._safe_read_file(uevent_path) or "\n")
 
             if not uevent:
                 continue
@@ -597,36 +744,44 @@ class LinuxHardwareInfo:
         return network_info
     
     def sound(self):
+        """Collect sound device information."""
         sound_info = {}
         audio_endpoints_by_device_path = {}
         seen_cards = set()
-        if os.path.exists("/sys/class/sound"):
-            for card in os.listdir("/sys/class/sound"):
+        
+        sound_class_path = "/sys/class/sound"
+        if self._safe_path_exists(sound_class_path):
+            for card in self._safe_listdir(sound_class_path):
                 if not card.startswith("card"):
                     continue
                 
                 try:
                     card_index = int(card.replace("card", ""))
-                except:
+                except (ValueError, AttributeError) as e:
+                    logger.debug(f"Invalid card name: {card}")
                     continue
 
-                card_path = os.path.join("/sys/class/sound", card)
+                card_path = os.path.join(sound_class_path, card)
                 device_link = os.path.join(card_path, "device")
                 
-                if not os.path.exists(device_link):
+                if not self._safe_path_exists(device_link):
                     continue
                 
                 vendor_id = device_id = None
 
-                for property_name in os.listdir(device_link):
+                for property_name in self._safe_listdir(device_link):
                     card_property_path = os.path.join(device_link, property_name)
 
                     if property_name == "vendor":
-                        vendor_id = self.format_value(self.utils.read_file(card_property_path))
+                        vendor_id = self.format_value(self._safe_read_file(card_property_path))
                     elif property_name == "device":
-                        device_id = self.format_value(self.utils.read_file(card_property_path))
+                        device_id = self.format_value(self._safe_read_file(card_property_path))
                 
                 if not all((vendor_id, device_id)):
+                    continue
+                
+                # Ensure IDs have sufficient length for slicing
+                if len(vendor_id) < 2 or len(device_id) < 2:
                     continue
                 
                 card_device_id = "{}-{}".format(vendor_id[2:], device_id[2:]).upper()
@@ -637,20 +792,28 @@ class LinuxHardwareInfo:
                     codec_name = "Unknown"
                     codec_id = subsystem_id = bus_type = None
 
-                    for property_name in os.listdir(os.path.join(device_link, sound_device_dir)):
-                        codec_property_path = os.path.join(device_link, sound_device_dir, property_name)
+                    codec_dir = os.path.join(device_link, sound_device_dir)
+                    for property_name in self._safe_listdir(codec_dir):
+                        codec_property_path = os.path.join(codec_dir, property_name)
 
                         if "chip_name" == property_name:
-                            codec_name = self.format_value(self.utils.read_file(codec_property_path))
+                            codec_name = self.format_value(self._safe_read_file(codec_property_path))
                         elif "vendor_name" == property_name:
-                            codec_vendor = self.format_value(self.utils.read_file(codec_property_path))
+                            codec_vendor = self.format_value(self._safe_read_file(codec_property_path))
                         elif "vendor_id" == property_name:
-                            codec_id = self.format_value(self.utils.read_file(codec_property_path))[2:].upper()
-                            codec_id = "{}-{}".format(codec_id[:4], codec_id[4:])
+                            vendor_id_val = self.format_value(self._safe_read_file(codec_property_path))
+                            if vendor_id_val and len(vendor_id_val) > 2:
+                                codec_id = vendor_id_val[2:].upper()
+                                if len(codec_id) >= 8:
+                                    codec_id = "{}-{}".format(codec_id[:4], codec_id[4:])
                         elif "subsystem_id" == property_name:
-                            subsystem_id = self.format_value(self.utils.read_file(codec_property_path))[2:].upper()
+                            subsystem_id_val = self.format_value(self._safe_read_file(codec_property_path))
+                            if subsystem_id_val and len(subsystem_id_val) > 2:
+                                subsystem_id = subsystem_id_val[2:].upper()
                         elif "modalias" == property_name:
-                            bus_type = self.format_value(self.utils.read_file(codec_property_path).split(":")[0].upper())
+                            modalias_val = self._safe_read_file(codec_property_path)
+                            if modalias_val and ":" in modalias_val:
+                                bus_type = self.format_value(modalias_val.split(":")[0].upper())
 
                     if all((codec_vendor, codec_name)):
                         codec_name = "{} {}".format(codec_vendor, codec_name)
@@ -663,7 +826,8 @@ class LinuxHardwareInfo:
                             "Controller Device ID": card_device_id
                         }
                         seen_cards.add(subsystem_id)
-                        seen_cards.add(subsystem_id[4:] + subsystem_id[:4])
+                        if len(subsystem_id) >= 8:
+                            seen_cards.add(subsystem_id[4:] + subsystem_id[:4])
                         sound_info[self.utils.get_unique_key(codec_name, sound_info)] = codec_info
 
                 real_device_path = os.path.realpath(device_link)
@@ -672,19 +836,21 @@ class LinuxHardwareInfo:
                 endpoints = []
                 
                 proc_card_path = "/proc/asound/card{}".format(card_index)
-                if os.path.exists(proc_card_path):
-                    for pcm in os.listdir(proc_card_path):
+                if self._safe_path_exists(proc_card_path):
+                    for pcm in self._safe_listdir(proc_card_path):
                         if pcm.startswith("pcm") and (pcm.endswith("p") or pcm.endswith("c")):
                             pcm_info_path = os.path.join(proc_card_path, pcm, "info")
-                            if os.path.exists(pcm_info_path):
+                            if self._safe_path_exists(pcm_info_path):
                                 try:
-                                    info_content = self.utils.read_file(pcm_info_path)
-                                    for line in info_content.splitlines():
-                                        if line.startswith("name:"):
-                                            name = line.split(":", 1)[1].strip()
-                                            if name and name not in endpoints:
-                                                endpoints.append(name)
-                                except:
+                                    info_content = self._safe_read_file(pcm_info_path)
+                                    if info_content:
+                                        for line in info_content.splitlines():
+                                            if line.startswith("name:"):
+                                                name = line.split(":", 1)[1].strip()
+                                                if name and name not in endpoints:
+                                                    endpoints.append(name)
+                                except Exception as e:
+                                    logger.debug(f"Error reading PCM info: {e}")
                                     pass
                 
                 if endpoints:
@@ -703,8 +869,11 @@ class LinuxHardwareInfo:
                         "Device ID": device.get("Device ID"),
                     }
                 
-                    if device.get("Subsystem ID"):
-                        sound_device_info["Subsystem ID"] = device.get("Subsystem ID")[4:] + device.get("Subsystem ID")[:4]
+                    subsys_id = device.get("Subsystem ID")
+                    if subsys_id and len(subsys_id) >= 8:
+                        sound_device_info["Subsystem ID"] = subsys_id[4:] + subsys_id[:4]
+                    elif subsys_id:
+                        sound_device_info["Subsystem ID"] = subsys_id
                     
                     if device.get("PCI Path"):
                         sound_device_info["PCI Path"] = device.get("PCI Path")
@@ -717,7 +886,11 @@ class LinuxHardwareInfo:
 
                     sound_info[self.utils.get_unique_key(device_name, sound_info)] = sound_device_info
                 else:
-                    device_subsystem_id = (device.get("Subsystem ID"), device.get("Subsystem ID")[4:] + device.get("Subsystem ID")[:4])
+                    subsys_id = device.get("Subsystem ID")
+                    if subsys_id and len(subsys_id) >= 8:
+                        device_subsystem_id = (subsys_id, subsys_id[4:] + subsys_id[:4])
+                    else:
+                        device_subsystem_id = (subsys_id,) if subsys_id else ()
                     sound_device_info = next((info for info in sound_info.values() if info.get("Subsystem ID") in device_subsystem_id ), None)
 
                     if device.get("PCI Path"):
@@ -729,8 +902,8 @@ class LinuxHardwareInfo:
                     if device_slot in audio_endpoints_by_device_path:
                         sound_device_info["Audio Endpoints"] = sorted(list(set(audio_endpoints_by_device_path[device_slot])))
 
-        if os.path.exists(USB_DEVICES_PATH):
-            for device in os.listdir(USB_DEVICES_PATH):
+        if self._safe_path_exists(USB_DEVICES_PATH):
+            for device in self._safe_listdir(USB_DEVICES_PATH):
                 device_dir = os.path.join(USB_DEVICES_PATH, device)
                 if not os.path.isdir(device_dir):
                     continue
@@ -738,17 +911,17 @@ class LinuxHardwareInfo:
                 is_audio = False
                 
                 b_device_class_path = os.path.join(device_dir, "bDeviceClass")
-                b_device_class = self.format_value(self.utils.read_file(b_device_class_path))
+                b_device_class = self.format_value(self._safe_read_file(b_device_class_path))
                 
                 if b_device_class == "01":
                     is_audio = True
                 else:
-                    for interface in os.listdir(device_dir):
+                    for interface in self._safe_listdir(device_dir):
                         if interface.startswith(device + ":"):
                             interface_dir = os.path.join(device_dir, interface)
                             b_interface_class_path = os.path.join(interface_dir, "bInterfaceClass")
-                            if os.path.exists(b_interface_class_path):
-                                b_interface_class = self.format_value(self.utils.read_file(b_interface_class_path))
+                            if self._safe_path_exists(b_interface_class_path):
+                                b_interface_class = self.format_value(self._safe_read_file(b_interface_class_path))
                                 if b_interface_class == "01":
                                     is_audio = True
                                     break
@@ -761,14 +934,14 @@ class LinuxHardwareInfo:
                 product_name_path = os.path.join(device_dir, "product")
                 manufacturer_path = os.path.join(device_dir, "manufacturer")
 
-                vendor_id = self.format_value(self.utils.read_file(vendor_path))
-                product_id = self.format_value(self.utils.read_file(product_path))
+                vendor_id = self.format_value(self._safe_read_file(vendor_path))
+                product_id = self.format_value(self._safe_read_file(product_path))
 
                 if not all((vendor_id, product_id)):
                     continue
 
-                product_name = self.format_value(self.utils.read_file(product_name_path)) or ""
-                manufacturer_name = self.format_value(self.utils.read_file(manufacturer_path)) or ""
+                product_name = self.format_value(self._safe_read_file(product_name_path)) or ""
+                manufacturer_name = self.format_value(self._safe_read_file(manufacturer_path)) or ""
                 
                 device_name = " ".join(filter(None, [manufacturer_name, product_name])).strip()
 
@@ -863,8 +1036,12 @@ class LinuxHardwareInfo:
             return device_info
             
         try:
-            bustype_val = int(self.utils.read_file(bustype_path).strip(), 16)
-        except:
+            bustype_content = self.utils.read_file(bustype_path)
+            if not bustype_content:
+                return device_info
+            bustype_val = int(bustype_content.strip(), 16)
+        except (ValueError, AttributeError, TypeError) as e:
+            logger.debug(f"Error parsing bustype: {e}")
             return device_info
         
         if bustype_val == 0x03:
@@ -881,17 +1058,22 @@ class LinuxHardwareInfo:
             device_info["Bus Type"] = "HID"
         
         try:
-            vendor_id = self.utils.read_file(vendor_path).strip().zfill(4).upper()
-            product_id = self.utils.read_file(product_path).strip().zfill(4).upper()
+            vendor_content = self.utils.read_file(vendor_path)
+            product_content = self.utils.read_file(product_path)
             
-            if vendor_id != "0000" and product_id != "0000":
-                device_info["Device ID"] = "{}-{}".format(vendor_id, product_id)
-            else:
-                name_path = os.path.join(device_dir, "name")
-                device_name = (self.utils.read_file(name_path) or "").strip()
-                if device_name:
-                    device_info["Device"] = device_name.replace(" ", "").upper()[:8]
-        except:
+            if vendor_content and product_content:
+                vendor_id = vendor_content.strip().zfill(4).upper()
+                product_id = product_content.strip().zfill(4).upper()
+                
+                if vendor_id != "0000" and product_id != "0000":
+                    device_info["Device ID"] = "{}-{}".format(vendor_id, product_id)
+                else:
+                    name_path = os.path.join(device_dir, "name")
+                    device_name = (self.utils.read_file(name_path) or "").strip()
+                    if device_name:
+                        device_info["Device"] = device_name.replace(" ", "").upper()[:8]
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"Error parsing input device IDs: {e}")
             pass
         
         return device_info
@@ -901,12 +1083,15 @@ class LinuxHardwareInfo:
         bustype_path = os.path.join(device_dir, "id", "bustype")
         if os.path.exists(bustype_path):
             try:
-                bustype_val = int(self.utils.read_file(bustype_path).strip(), 16)
-                if bustype_val == 0x11:
-                    return "PS/2"
-                elif bustype_val == 0x18:
-                    return "I2C"
-            except:
+                bustype_content = self.utils.read_file(bustype_path)
+                if bustype_content:
+                    bustype_val = int(bustype_content.strip(), 16)
+                    if bustype_val == 0x11:
+                        return "PS/2"
+                    elif bustype_val == 0x18:
+                        return "I2C"
+            except (ValueError, AttributeError, TypeError) as e:
+                logger.debug(f"Error parsing bustype in get_input_device_type: {e}")
                 pass
 
         capabilities_path = os.path.join(device_dir, "capabilities")
@@ -926,21 +1111,24 @@ class LinuxHardwareInfo:
             key_caps = self.utils.read_file(key_caps_path)
             if key_caps and key_caps.strip() != "0":
                 has_keys = True
-        except:
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"Error reading key capabilities: {e}")
             pass
         
         try:
             rel_caps = self.utils.read_file(rel_caps_path)
             if rel_caps and rel_caps.strip() != "0":
                 has_relative = True
-        except:
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"Error reading relative capabilities: {e}")
             pass
         
         try:
             abs_caps = self.utils.read_file(abs_caps_path)
             if abs_caps and abs_caps.strip() != "0":
                 has_absolute = True
-        except:
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"Error reading absolute capabilities: {e}")
             pass
         
         lower_name = device_name.lower()
@@ -957,11 +1145,13 @@ class LinuxHardwareInfo:
         return None
                 
     def input(self):
+        """Collect input device information."""
         input_info = {}
 
         INPUT_DEVICE_PATH = "/sys/class/input"
 
-        if not os.path.exists(INPUT_DEVICE_PATH):
+        if not self._safe_path_exists(INPUT_DEVICE_PATH):
+            logger.warning(f"Input device path not found: {INPUT_DEVICE_PATH}")
             return input_info
         
         filter_words = ("wireless radio controls", "vendor-defined device", "consumer control device", "system controller", "pc speaker", "power button", "sleep button", "lid switch")
@@ -969,7 +1159,7 @@ class LinuxHardwareInfo:
         seen_ids = set()
         
         input_devices = []
-        for device in os.listdir(INPUT_DEVICE_PATH):
+        for device in self._safe_listdir(INPUT_DEVICE_PATH):
             device_dir = os.path.join(INPUT_DEVICE_PATH, device)
 
             if not os.path.isdir(device_dir):
@@ -984,7 +1174,7 @@ class LinuxHardwareInfo:
             
         for device, device_dir in input_devices:
             name_path = os.path.join(device_dir, "name")
-            device_name = (self.utils.read_file(name_path) or device).strip()
+            device_name = (self._safe_read_file(name_path) or device).strip()
             
             device_info = self.parse_input_device_path(device_dir)
             
@@ -1059,10 +1249,11 @@ class LinuxHardwareInfo:
         return storage_controller_info
 
     def biometric(self):
+        """Collect biometric device information."""
         biometric_info = {}
 
-        if os.path.exists(USB_DEVICES_PATH):
-            for device in os.listdir(USB_DEVICES_PATH):
+        if self._safe_path_exists(USB_DEVICES_PATH):
+            for device in self._safe_listdir(USB_DEVICES_PATH):
                 device_dir = os.path.join(USB_DEVICES_PATH, device)
 
                 if not os.path.isdir(device_dir):
@@ -1073,14 +1264,14 @@ class LinuxHardwareInfo:
                 product_name_path = os.path.join(device_dir, "product")
                 manufacturer_path = os.path.join(device_dir, "manufacturer")
 
-                vendor_id = self.format_value(self.utils.read_file(vendor_path))
-                product_id = self.format_value(self.utils.read_file(product_path))
+                vendor_id = self.format_value(self._safe_read_file(vendor_path))
+                product_id = self.format_value(self._safe_read_file(product_path))
 
                 if not all((vendor_id, product_id)):
                     continue
 
-                product_name = self.format_value(self.utils.read_file(product_name_path)) or ""
-                manufacturer_name = self.format_value(self.utils.read_file(manufacturer_path)) or ""
+                product_name = self.format_value(self._safe_read_file(product_name_path)) or ""
+                manufacturer_name = self.format_value(self._safe_read_file(manufacturer_path)) or ""
                 
                 device_name = " ".join(filter(None, [manufacturer_name, product_name])).strip()
 
@@ -1094,16 +1285,20 @@ class LinuxHardwareInfo:
                     interface_dirs = self.utils.find_matching_paths(device_dir, name_filter=":", type_filter="dir")
                     for interface_dir, _ in interface_dirs:
                         interface_class_path = os.path.join(device_dir, interface_dir, "bInterfaceClass")
-                        interface_class = self.format_value(self.utils.read_file(interface_class_path))
+                        interface_class = self.format_value(self._safe_read_file(interface_class_path))
                         if interface_class == "ff":
                             modalias_path = os.path.join(device_dir, interface_dir, "modalias")
-                            modalias = self.format_value(self.utils.read_file(modalias_path)) or ""
+                            modalias = self.format_value(self._safe_read_file(modalias_path)) or ""
                             driver_path = os.path.join(device_dir, interface_dir, "driver")
                             if os.path.islink(driver_path):
-                                driver_name = os.path.basename(os.readlink(driver_path)).lower()
-                                if "fingerprint" in driver_name or "fprint" in driver_name:
-                                    is_biometric = True
-                                    break
+                                try:
+                                    driver_name = os.path.basename(os.readlink(driver_path)).lower()
+                                    if "fingerprint" in driver_name or "fprint" in driver_name:
+                                        is_biometric = True
+                                        break
+                                except OSError as e:
+                                    logger.debug(f"Error reading driver symlink: {e}")
+                                    pass
 
                 if not is_biometric:
                     continue
@@ -1116,8 +1311,8 @@ class LinuxHardwareInfo:
                 biometric_info[self.utils.get_unique_key(device_name, biometric_info)] = device_info
 
         PLATFORM_DEVICE_PATH = "/sys/bus/platform/devices"
-        if os.path.exists(PLATFORM_DEVICE_PATH):
-            for device in os.listdir(PLATFORM_DEVICE_PATH):
+        if self._safe_path_exists(PLATFORM_DEVICE_PATH):
+            for device in self._safe_listdir(PLATFORM_DEVICE_PATH):
                 device_dir = os.path.join(PLATFORM_DEVICE_PATH, device)
                 
                 if not os.path.isdir(device_dir):
@@ -1126,8 +1321,8 @@ class LinuxHardwareInfo:
                 description_path = os.path.join(device_dir, "description")
                 modalias_path = os.path.join(device_dir, "modalias")
                 
-                description = (self.format_value(self.utils.read_file(description_path)) or "").lower()
-                modalias = (self.format_value(self.utils.read_file(modalias_path)) or "").lower()
+                description = (self.format_value(self._safe_read_file(description_path)) or "").lower()
+                modalias = (self.format_value(self._safe_read_file(modalias_path)) or "").lower()
                 
                 if self.utils.contains_any(("fingerprint", "biometric", "fprint"), description) or \
                    self.utils.contains_any(("fingerprint", "biometric", "fprint"), modalias):
@@ -1276,7 +1471,9 @@ class LinuxHardwareInfo:
                         elif "hid" == firmware_node_property:
                             hid = self.format_value(self.utils.read_file(firmware_node_property_path))
                 elif "modalias" == property_name:
-                    bus_type = self.format_value(self.utils.read_file(device_property_path).split(":")[0].upper())
+                    modalias_content = self.utils.read_file(device_property_path)
+                    if modalias_content and ":" in modalias_content:
+                        bus_type = self.format_value(modalias_content.split(":")[0].upper())
 
             if not bus_type:
                 continue
