@@ -66,7 +66,7 @@ class Utils:
                 if isinstance(data, bytes) and sys.platform.startswith("linux") and file_path.startswith(("/sys/", "/proc/")) and "edid" not in os.path.basename(file_path).lower():
                     try:
                         data = data.decode("utf-8")
-                    except:
+                    except (UnicodeDecodeError, AttributeError):
                         pass
         return data
 

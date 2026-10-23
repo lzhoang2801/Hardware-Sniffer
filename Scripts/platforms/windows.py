@@ -89,7 +89,8 @@ class WindowsHardwareInfo:
             "Bluetooth": [],
             "SDHost": [],
             "MTD": [],
-            "System": []
+            "System": [],
+            "Ports": []
         }
         self.chipset_model = "Unknown"
 
@@ -112,11 +113,13 @@ class WindowsHardwareInfo:
             
     def motherboard(self):
         manufacturer = model = "Unknown"
+        computer_system = None
 
-        for computer_system in c.Win32_ComputerSystem():
-            if computer_system:
-                manufacturer = (getattr(computer_system, "Manufacturer", None) or "Unknown").split(" ")[0]
-                model = getattr(computer_system, "Model", None) or "Unknown"
+        for cs in c.Win32_ComputerSystem():
+            if cs:
+                computer_system = cs
+                manufacturer = (getattr(cs, "Manufacturer", None) or "Unknown").split(" ")[0]
+                model = getattr(cs, "Model", None) or "Unknown"
 
         for base_board in c.Win32_BaseBoard():
             if base_board:
@@ -139,14 +142,18 @@ class WindowsHardwareInfo:
                 self.chipset_model = chipset_name
                 break
 
-        system_platform = computer_system.PCSystemType
-        
-        if system_platform == "Unspecified":
-            pass
-        elif system_platform in (2, 8, 9, 10):
-            system_platform = "Laptop"
-        else:
-            system_platform = "Desktop"
+        system_platform = "Desktop"
+        if computer_system:
+            try:
+                pc_type = getattr(computer_system, "PCSystemType", None)
+                if pc_type == "Unspecified":
+                    system_platform = "Unspecified"
+                elif pc_type in (2, 8, 9, 10):
+                    system_platform = "Laptop"
+                else:
+                    system_platform = "Desktop"
+            except Exception:
+                pass
                 
         return {
             "Name": system_name,
@@ -163,7 +170,7 @@ class WindowsHardwareInfo:
                 bios_info["Version"] = getattr(bios, "SMBIOSBIOSVersion", None) or "Unknown"
                 try:
                     bios_info["Release Date"] = time.strftime("%Y-%m-%d", time.strptime(bios.ReleaseDate.split('.')[0], "%Y%m%d%H%M%S"))
-                except:
+                except (ValueError, AttributeError, TypeError):
                     bios_info["Release Date"] = "Unknown"
 
         for computer_system in c.Win32_ComputerSystem():
@@ -202,6 +209,24 @@ class WindowsHardwareInfo:
 
         if not bios_info.get("Secure Boot"):
             bios_info["Secure Boot"] = "Disabled"
+
+        try:
+            for bios in c.Win32_BIOS():
+                serial = getattr(bios, "SerialNumber", None)
+                if serial and str(serial).strip():
+                    bios_info["Serial Number"] = str(serial).strip()
+                    break
+        except Exception:
+            pass
+
+        try:
+            for cs in c.Win32_ComputerSystem():
+                uuid = getattr(cs, "UUID", None)
+                if uuid and str(uuid).strip():
+                    bios_info["UUID"] = str(uuid).strip()
+                    break
+        except Exception:
+            pass
 
         return bios_info
 
@@ -317,7 +342,7 @@ class WindowsHardwareInfo:
             if "Unknown" in (device_name, device_class):
                 try:
                     device_name = self.pci_ids.get(device_info.get("Device ID")[:4]).get("devices")[device_info.get("Device ID")[5:]]
-                except:
+                except (TypeError, AttributeError, KeyError):
                     pass
             
             device_info.update(self.get_device_location_paths(device))
@@ -348,7 +373,7 @@ class WindowsHardwareInfo:
             monitor_ids = wmi_service.WmiMonitorID()
             connection_params = wmi_service.WmiMonitorConnectionParams()
             source_modes = wmi_service.WmiMonitorListedSupportedSourceModes()
-        except:
+        except Exception:
             monitor_ids = connection_params = source_modes = []
 
         for monitor_property in monitor_properties:
@@ -356,7 +381,7 @@ class WindowsHardwareInfo:
                 monitor_id = next((monitor_id for monitor_id in monitor_ids if monitor_property.PNPDeviceID in monitor_id.InstanceName.upper()), None)
                 user_friendly_name = monitor_id.UserFriendlyName
                 monitor_name = bytes(user_friendly_name).decode('ascii').rstrip('\x00')
-            except:
+            except (AttributeError, TypeError, IndexError):
                 monitor_name = monitor_property.PNPDeviceID.split("\\")[1]
             
             try:
@@ -379,7 +404,7 @@ class WindowsHardwareInfo:
                     video_output_type = "Internal"
                 else:
                     video_output_type = "Uninitialized"
-            except:
+            except (AttributeError, TypeError, IndexError):
                 video_output_type = "Uninitialized"
 
             max_h_active = 0
@@ -392,7 +417,7 @@ class WindowsHardwareInfo:
                 for monitor_source_mode in monitor_source_modes:
                     max_h_active = max(max_h_active, monitor_source_mode.HorizontalActivePixels)
                     max_v_active = max(max_v_active, monitor_source_mode.VerticalActivePixels)
-            except:
+            except (AttributeError, TypeError):
                 pass
 
             connected_gpu = None
@@ -414,9 +439,47 @@ class WindowsHardwareInfo:
                 monitor_info[unique_monitor_name]["Connected GPU"] = connected_gpu
 
         return monitor_info
+
+    def ram(self):
+        """Collect RAM (memory modules) information."""
+        ram_info = {}
+        total_gb = 0
+        try:
+            for i, mem in enumerate(c.Win32_PhysicalMemory()):
+                capacity = getattr(mem, "Capacity", None) or 0
+                capacity_gb = int(capacity) // (1024 ** 3) if capacity else 0
+                total_gb += capacity_gb
+                slot = getattr(mem, "DeviceLocator", None) or getattr(mem, "BankLabel", None) or "Slot {}".format(i + 1)
+                speed = getattr(mem, "Speed", None)
+                manufacturer = getattr(mem, "Manufacturer", None) or "Unknown"
+                part_number = getattr(mem, "PartNumber", None) or ""
+                mem_type = {20: "DDR", 21: "DDR2", 22: "DDR2 FB-DIMM", 24: "DDR3", 26: "DDR4", 34: "DDR5"}.get(getattr(mem, "SMBIOSMemoryType", 0), "Unknown")
+                slot_info = {
+                    "Capacity": "{} GB".format(capacity_gb) if capacity_gb else "Unknown",
+                    "Speed": "{} MHz".format(speed) if speed else "Unknown",
+                    "Manufacturer": manufacturer.strip() if manufacturer else "Unknown",
+                    "Type": mem_type
+                }
+                if part_number and part_number.strip():
+                    slot_info["Part Number"] = part_number.strip()
+                ram_info[self.utils.get_unique_key(str(slot), ram_info)] = slot_info
+            if ram_info and total_gb:
+                ram_info["Total"] = {"Total RAM": "{} GB".format(total_gb)}
+        except Exception:
+            pass
+        return ram_info
                     
     def network(self):
         network_info = {}
+        mac_by_description = {}
+        try:
+            for adapter in c.Win32_NetworkAdapter(PhysicalAdapter=True):
+                mac = getattr(adapter, "MACAddress", None)
+                desc = getattr(adapter, "Description", None) or getattr(adapter, "Name", None)
+                if mac and desc:
+                    mac_by_description[desc.strip()] = mac
+        except Exception:
+            pass
 
         for device in self.devices_by_class.get("Net"):
             device_name = getattr(device, "Name", None) or "Unknown"
@@ -434,6 +497,14 @@ class WindowsHardwareInfo:
             else:
                 continue
             
+            if device_name in mac_by_description:
+                device_info["MAC Address"] = mac_by_description[device_name]
+            else:
+                for desc, mac in mac_by_description.items():
+                    if desc in device_name or device_name in desc:
+                        device_info["MAC Address"] = mac
+                        break
+            
             network_info[self.utils.get_unique_key(device_name, network_info)] = device_info
 
         return network_info
@@ -449,7 +520,7 @@ class WindowsHardwareInfo:
                     return self.parse_device_path(parent_id).get("Device ID")
 
                 current_device = system_device_by_pnp_id.get(parent_id)
-            except:
+            except (AttributeError, TypeError, IndexError):
                 break
 
         return None
@@ -466,7 +537,7 @@ class WindowsHardwareInfo:
                     audio_endpoints_by_parent[parent_id] = []
 
                 audio_endpoints_by_parent[parent_id].append(audio_name)
-            except:
+            except (AttributeError, TypeError, IndexError):
                 pass
 
         sound_info = {}
@@ -515,6 +586,96 @@ class WindowsHardwareInfo:
             usb_controller_info[self.utils.get_unique_key(device_name, usb_controller_info)] = device_info
 
         return usb_controller_info
+
+    def usb_ports(self):
+        """Collect ALL USB devices (controllers, hubs, peripherals) for Hackintosh USB mapping."""
+        usb_ports_info = {}
+
+        for device in self.devices_by_class.get("USB", []):
+            device_name = getattr(device, "Name", None) or "Unknown"
+            pnp_device_id = getattr(device, "PNPDeviceID")
+            
+            if not pnp_device_id:
+                continue
+            
+            device_info = self.parse_device_path(pnp_device_id)
+            device_info.update(self.get_device_location_paths(device))
+            
+            device_type = "Controller" if device_info.get("Bus Type") == "PCI" else "Hub" if "hub" in device_name.lower() else "Device"
+            device_info["Type"] = device_type
+            
+            try:
+                parent_id = device.GetDeviceProperties(["DEVPKEY_Device_Parent"])[0][0].Data
+                device_info["Parent ID"] = parent_id
+            except (AttributeError, TypeError, IndexError):
+                pass
+            
+            unique_key = self.utils.get_unique_key(device_name, usb_ports_info)
+            usb_ports_info[unique_key] = device_info
+
+        return usb_ports_info
+
+    def serial_ports(self):
+        """Collect COM ports (serial ports)."""
+        serial_info = {}
+        seen_names = set()
+        
+        try:
+            for port in c.Win32_SerialPort():
+                port_name = getattr(port, "DeviceID", None) or getattr(port, "Name", None) or "Unknown"
+                port_info = {
+                    "Name": getattr(port, "Name", None) or "Unknown",
+                    "Device ID": getattr(port, "DeviceID", None) or "Unknown",
+                    "Description": getattr(port, "Description", None) or "Unknown",
+                    "Max Baud Rate": getattr(port, "MaxBaudRate", None)
+                }
+                seen_names.add(port_name.upper())
+                serial_info[self.utils.get_unique_key(port_name, serial_info)] = port_info
+        except Exception:
+            pass
+        
+        for device in self.devices_by_class.get("Ports", []):
+            device_name = getattr(device, "Name", None) or "Unknown"
+            pnp_device_id = getattr(device, "PNPDeviceID")
+            if not pnp_device_id or "LPT" in device_name.upper() or "COM" not in device_name.upper():
+                continue
+            if device_name.upper() in seen_names:
+                continue
+            device_info = self.parse_device_path(pnp_device_id)
+            device_info.update(self.get_device_location_paths(device))
+            device_info["Name"] = device_name
+            serial_info[self.utils.get_unique_key(device_name, serial_info)] = device_info
+        
+        return serial_info
+
+    def parallel_ports(self):
+        """Collect LPT ports (parallel ports)."""
+        parallel_info = {}
+        
+        try:
+            for port in c.Win32_ParallelPort():
+                port_name = getattr(port, "DeviceID", None) or getattr(port, "Name", None) or "Unknown"
+                port_info = {
+                    "Name": getattr(port, "Name", None) or "Unknown",
+                    "Device ID": getattr(port, "DeviceID", None) or "Unknown",
+                    "Description": getattr(port, "Description", None) or "Unknown"
+                }
+                parallel_info[self.utils.get_unique_key(port_name, parallel_info)] = port_info
+        except Exception:
+            pass
+        
+        for device in self.devices_by_class.get("Ports", []):
+            device_name = getattr(device, "Name", None) or "Unknown"
+            pnp_device_id = getattr(device, "PNPDeviceID")
+            if not pnp_device_id or "LPT" not in device_name.upper():
+                continue
+            device_info = self.parse_device_path(pnp_device_id)
+            device_info.update(self.get_device_location_paths(device))
+            unique_key = self.utils.get_unique_key(device_name, parallel_info)
+            if unique_key not in parallel_info:
+                parallel_info[unique_key] = {**device_info, "Name": device_name}
+        
+        return parallel_info
                 
     def input(self):
         input_info = {}
@@ -544,7 +705,7 @@ class WindowsHardwareInfo:
 
             try:
                 device_info["Device Type"] = device_type_by_service[device.Service]
-            except:
+            except (KeyError, AttributeError):
                 if device.PNPClass == "Keyboard":
                     device_info["Device Type"] = "Keyboard"
                 elif device.PNPClass == "Mouse":
@@ -569,7 +730,7 @@ class WindowsHardwareInfo:
             if not device_info.get("Bus Type") in ("ACPI"):
                 try:
                     device_name = self.usb_ids.get(device_info.get("Device ID")[:4]).get("devices")[device_info.get("Device ID")[5:]]
-                except:
+                except (TypeError, AttributeError, KeyError):
                     pass
                 device_info["Bus Type"] = "USB"
                 del device_info["Device Type"]
@@ -594,7 +755,7 @@ class WindowsHardwareInfo:
                     disk_drive_names_by_id[parent_id] = []
 
                 disk_drive_names_by_id[parent_id].append(device_name)
-            except:
+            except (AttributeError, TypeError, IndexError):
                 pass
 
         for device in self.devices_by_class.get("HDC") + self.devices_by_class.get("SCSIAdapter"):
@@ -610,7 +771,7 @@ class WindowsHardwareInfo:
 
             try:
                 device_name = self.pci_ids.get(device_info.get("Device ID")[:4]).get("devices")[device_info.get("Device ID")[5:]]
-            except:
+            except (TypeError, AttributeError, KeyError):
                 pass
             
             device_info.update(self.get_device_location_paths(device))
@@ -702,12 +863,16 @@ class WindowsHardwareInfo:
             ('Gathering PnP devices', self.pnp_devices, None),
             ('Gathering motherboard information', self.motherboard, "Motherboard"),
             ('Gathering BIOS information', self.bios, "BIOS"),
+            ('Gathering RAM information', self.ram, "RAM"),
             ('Gathering CPU information', self.cpu, "CPU"),
             ('Gathering GPU information', self.gpu, "GPU"),
             ('Gathering monitor information', self.monitor, "Monitor"),
             ('Gathering network information', self.network, "Network"),
             ('Gathering sound information', self.sound, "Sound"),
             ('Gathering USB controllers', self.usb_controllers, "USB Controllers"),
+            ('Gathering USB ports (all devices)', self.usb_ports, "USB Ports"),
+            ('Gathering serial ports (COM)', self.serial_ports, "Serial Ports"),
+            ('Gathering parallel ports (LPT)', self.parallel_ports, "Parallel Ports"),
             ('Gathering input devices', self.input, "Input"),
             ('Gathering storage controllers', self.storage_controllers, "Storage Controllers"),
             ('Gathering biometric information', self.biometric, "Biometric"),

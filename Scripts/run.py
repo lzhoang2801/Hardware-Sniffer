@@ -3,7 +3,7 @@
 import sys, subprocess, time, threading, shlex
 try:
     from Queue import Queue, Empty
-except:
+except ImportError:
     from queue import Queue, Empty
 
 ON_POSIX = 'posix' in sys.builtin_module_names
@@ -69,10 +69,12 @@ class Run:
 
             o, e = p.communicate()
             return (output+o, error+e, p.returncode)
-        except:
+        except Exception:
             if p:
-                try: o, e = p.communicate()
-                except: o = e = ""
+                try:
+                    o, e = p.communicate()
+                except Exception:
+                    o = e = ""
                 return (output+o, error+e, p.returncode)
             return ("", "Command not found!", 1)
 
@@ -91,9 +93,8 @@ class Run:
                 comm = shlex.split(comm)
             p = subprocess.Popen(comm, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             c = p.communicate()
-        except:
-            if c == None:
-                return ("", "Command not found!", 1)
+        except Exception:
+            return ("", "Command not found!", 1)
         return (self._decode(c[0]), self._decode(c[1]), p.returncode)
 
     def run(self, command_list, leave_on_fail = False):
